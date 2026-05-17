@@ -1,0 +1,34 @@
+# JUCE-generated output: regenerate via Projucer from WTGenerator.jucer
+Builds/
+JuceLibraryCode/
+
+# Xcode user state
+*.xcuserdata/
+xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcuserstate
+
+# IDE / editor cruft
+.vscode/
+.idea/
+*.swp
+*.user
+*.suo
+
+# macOS
+.DS_Store
+
+# Compiled artifacts
+*.o
+*.obj
+*.exe
+*.dylib
+*.so
+*.a
+*.lib
+
+# Internal design docs (kept local; not part of the public repo).
+PLANNING.md
+PRINCIPLES.md
+WTSYNTH_REFERENCE.md
+WTGENERATOR.md

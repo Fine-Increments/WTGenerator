@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Sawtooth, built from the fractional part of (freq * t). Like the
+     square, its discontinuity is band-limited by the oversampler. -->
+
+<ParameterSet output-mode="expression" analysis="GenericOverlay">
+  <Float name="freq" minVal="20" maxVal="12000" defaultVal="220"/>
+  <Float name="amp"  minVal="0"  maxVal="1"     defaultVal="0.5"/>
+  <Expression>amp * (2 * frac(freq * t) - 1)</Expression>
+</ParameterSet>

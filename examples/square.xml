@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Band-limited square wave. The hard edges of sgn() carry harmonic
+     energy far above Nyquist; WTGenerator's 8x oversampling band-limits
+     it, so this stays clean where a naively sampled square would alias. -->
+
+<ParameterSet output-mode="expression" analysis="GenericOverlay">
+  <Float name="freq" minVal="20" maxVal="12000" defaultVal="1000"/>
+  <Float name="amp"  minVal="0"  maxVal="1"     defaultVal="0.5"/>
+  <Expression>amp * sgn(sin(2 * pi * freq * t))</Expression>
+</ParameterSet>

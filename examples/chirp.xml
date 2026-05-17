@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Linear chirp - the instantaneous frequency rises by `rate` Hz every
+     second, starting from `f0`. An aperiodic signal: a closed-form
+     function of t that a cyclic wavetable cannot represent at all. Best
+     driven by the host transport, where t (and so the sweep) resets to
+     zero on rewind. -->
+
+<ParameterSet output-mode="expression" analysis="GenericOverlay">
+  <Float name="f0"   minVal="20" maxVal="2000" defaultVal="50"/>
+  <Float name="rate" minVal="0"  maxVal="4000" defaultVal="500"/>
+  <Float name="amp"  minVal="0"  maxVal="1"    defaultVal="0.5"/>
+  <Expression>amp * sin(2 * pi * (f0 * t + 0.5 * rate * t * t))</Expression>
+</ParameterSet>

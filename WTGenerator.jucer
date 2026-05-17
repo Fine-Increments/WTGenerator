@@ -17,6 +17,28 @@
       <FILE id="wCf40q" name="PluginEditor.cpp" compile="1" resource="0"
             file="Source/PluginEditor.cpp"/>
       <FILE id="L1ZJO2" name="PluginEditor.h" compile="0" resource="0" file="Source/PluginEditor.h"/>
+      <FILE id="DyPp01" name="DynamicParameterPanel.cpp" compile="1" resource="0"
+            file="Source/DynamicParameterPanel.cpp"/>
+      <FILE id="DyPp02" name="DynamicParameterPanel.h" compile="0" resource="0"
+            file="Source/DynamicParameterPanel.h"/>
+      <GROUP id="{2F1A6C3E-9B47-4D58-A0E2-7C9F1B3D6A84}" name="Expression">
+        <FILE id="ExDx01" name="DefaultExpression.h" compile="0" resource="0"
+              file="Source/Expression/DefaultExpression.h"/>
+        <FILE id="ExDf01" name="ExpressionDefinition.h" compile="0" resource="0"
+              file="Source/Expression/ExpressionDefinition.h"/>
+        <FILE id="ExEn01" name="ExpressionEngine.cpp" compile="1" resource="0"
+              file="Source/Expression/ExpressionEngine.cpp"/>
+        <FILE id="ExEn02" name="ExpressionEngine.h" compile="0" resource="0"
+              file="Source/Expression/ExpressionEngine.h"/>
+        <FILE id="ExXp01" name="ExpressionXmlParser.cpp" compile="1" resource="0"
+              file="Source/Expression/ExpressionXmlParser.cpp"/>
+        <FILE id="ExXp02" name="ExpressionXmlParser.h" compile="0" resource="0"
+              file="Source/Expression/ExpressionXmlParser.h"/>
+        <FILE id="ExSg01" name="SignalGenerator.cpp" compile="1" resource="0"
+              file="Source/Expression/SignalGenerator.cpp"/>
+        <FILE id="ExSg02" name="SignalGenerator.h" compile="0" resource="0"
+              file="Source/Expression/SignalGenerator.h"/>
+      </GROUP>
     </GROUP>
   </MAINGROUP>
   <MODULES>
@@ -42,9 +64,11 @@
     <XCODE_MAC targetFolder="Builds/MacOSX">
       <CONFIGURATIONS>
         <CONFIGURATION isDebug="1" name="Debug" targetName="WTGenerator" vst3BinaryLocation="$(HOME)/Library/Audio/Plug-Ins/VST3/"
-                       auBinaryLocation="$(HOME)/Library/Audio/Plug-Ins/Components/"/>
+                       auBinaryLocation="$(HOME)/Library/Audio/Plug-Ins/Components/"
+                       macOSDeploymentTarget="11" osxCompatibility="11 SDK"/>
         <CONFIGURATION isDebug="0" name="Release" targetName="WTGenerator" auBinaryLocation="$(HOME)/Library/Audio/Plug-Ins/Components/"
-                       vst3BinaryLocation="$(HOME)/Library/Audio/Plug-Ins/VST3/"/>
+                       vst3BinaryLocation="$(HOME)/Library/Audio/Plug-Ins/VST3/" macOSDeploymentTarget="11"
+                       osxCompatibility="11 SDK"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
         <MODULEPATH id="juce_audio_basics" path="../JUCE/modules"/>

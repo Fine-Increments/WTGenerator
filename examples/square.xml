@@ -2,10 +2,12 @@
 
 <!-- Band-limited square wave. The hard edges of sgn() carry harmonic
      energy far above Nyquist; WTGenerator's 8x oversampling band-limits
-     it, so this stays clean where a naively sampled square would alias. -->
+     it, so this stays clean where a naively sampled square would alias.
+     The oscillator is built on a phasor, so `freq` sweeps click-free. -->
 
 <ParameterSet output-mode="expression" analysis="GenericOverlay">
-  <Float name="freq" minVal="20" maxVal="12000" defaultVal="1000"/>
-  <Float name="amp"  minVal="0"  maxVal="1"     defaultVal="0.5"/>
-  <Expression>amp * sgn(sin(2 * pi * freq * t))</Expression>
+  <Float  name="freq" minVal="20" maxVal="12000" defaultVal="1000"/>
+  <Float  name="amp"  minVal="0"  maxVal="1"     defaultVal="0.5"/>
+  <Phasor name="ph" freq="freq"/>
+  <Expression>amp * sgn(sin(ph))</Expression>
 </ParameterSet>

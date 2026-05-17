@@ -16,6 +16,7 @@
 // source file (a 1.66 MB header has no business in the IDE source tree).
 #include "../ThirdParty/exprtk/exprtk.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -91,6 +92,14 @@ struct ExpressionEngine::Impl
     std::vector<double>  paramSpan;                 // denormalising 0..1 pool values
     NoiseFunction        noiseFn;
 
+    // Declared phasors: phasorPhase[i] is the bound, engine-integrated phase
+    // variable; the frequency comes from paramValues[phasorFreqParamIndex[i]]
+    // when that index is >= 0, otherwise from phasorFreqConstant[i].
+    std::vector<double>  phasorPhase;
+    std::vector<int>     phasorFreqParamIndex;
+    std::vector<double>  phasorFreqConstant;
+    double               lastT = 0.0;               // for rewind detection
+
     bool        compiled = false;
     std::string lastError;
 
@@ -153,6 +162,43 @@ bool ExpressionEngine::compile (const ExpressionDefinition& definition, double s
         }
     }
 
+    // Declared phasors: one engine-integrated phase accumulator each, bound
+    // into the symbol table as a variable. Sized once here so the bindings
+    // stay valid; the resolved frequency source is captured for evaluate().
+    const auto numPhasors = definition.phasors.size();
+    m.phasorPhase.assign          (numPhasors, 0.0);
+    m.phasorFreqParamIndex.assign (numPhasors, -1);
+    m.phasorFreqConstant.assign   (numPhasors, 0.0);
+
+    for (size_t i = 0; i < numPhasors; ++i)
+    {
+        const auto& phasor = definition.phasors[i];
+
+        if (phasor.freqParam.isNotEmpty())
+        {
+            for (size_t p = 0; p < numParams; ++p)
+                if (definition.parameters[p].name == phasor.freqParam)
+                {
+                    m.phasorFreqParamIndex[i] = (int) p;
+                    break;
+                }
+        }
+        else
+        {
+            m.phasorFreqConstant[i] = phasor.freqConstant;
+        }
+
+        if (! m.symbolTable.add_variable (phasor.name.toStdString(), m.phasorPhase[i]))
+        {
+            m.lastError = "Phasor name '" + phasor.name.toStdString()
+                        + "' is not usable - it collides with a name reserved "
+                          "by the expression language.";
+            return false;
+        }
+    }
+
+    m.lastT = 0.0;
+
     m.symbolTable.add_function ("noise", m.noiseFn);
 
     // Fresh expression bound to the rebuilt table.
@@ -193,11 +239,36 @@ void ExpressionEngine::setParameterNormalised (int index, double norm01) noexcep
                                       + norm01 * impl->paramSpan[(size_t) index];
 }
 
-double ExpressionEngine::evaluate (double t) noexcept
+double ExpressionEngine::evaluate (double t, double dt) noexcept
 {
     if (! impl->compiled)
         return 0.0;
 
-    impl->t = t;
-    return impl->expression.value();
+    auto& m = *impl;
+
+    // A backward step in t - transport rewind, or a fresh playback start -
+    // resets the phasor accumulators, so a phasor-built signal is
+    // reproducible from playback start.
+    if (t < m.lastT)
+        std::fill (m.phasorPhase.begin(), m.phasorPhase.end(), 0.0);
+    m.lastT = t;
+
+    // Integrate each phasor: phase += 2*pi * freq * dt, wrapped to [0, 2*pi).
+    // The integral is continuous in freq, so an automated driving frequency
+    // steps the phase RATE but never jumps the phase itself - no click.
+    constexpr double twoPi = 6.283185307179586476925;
+    for (size_t i = 0; i < m.phasorPhase.size(); ++i)
+    {
+        const double freq = (m.phasorFreqParamIndex[i] >= 0)
+            ? m.paramValues[(size_t) m.phasorFreqParamIndex[i]]
+            : m.phasorFreqConstant[i];
+
+        double phase = std::fmod (m.phasorPhase[i] + twoPi * freq * dt, twoPi);
+        if (phase < 0.0)
+            phase += twoPi;
+        m.phasorPhase[i] = phase;
+    }
+
+    m.t = t;
+    return m.expression.value();
 }

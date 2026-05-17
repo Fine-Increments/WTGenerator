@@ -1,13 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <!-- Frequency modulation - the WTGENERATOR.md section 4.3 worked example.
-     Automate mod_index or mod_hz at audio rate and the carrier reacts every
-     sample, with no script re-run and no wavetable re-render. -->
+     Two phasors (carrier and modulator); the modulator's phase is added
+     into the carrier's. Automate mod_index, mod_hz or carrier_hz at audio
+     rate - every one is click-free, because each oscillator rides an
+     integrated phasor rather than a raw freq*t term. -->
 
 <ParameterSet output-mode="expression" analysis="GenericOverlay">
-  <Float name="carrier_hz" minVal="20"  maxVal="20000" defaultVal="1000"/>
-  <Float name="mod_hz"     minVal="0.1" maxVal="2000"  defaultVal="100"/>
-  <Float name="mod_index"  minVal="0"   maxVal="12"    defaultVal="2"/>
-  <Float name="amp"        minVal="0"   maxVal="1"     defaultVal="0.5"/>
-  <Expression>amp * sin(2 * pi * carrier_hz * t + mod_index * sin(2 * pi * mod_hz * t))</Expression>
+  <Float  name="carrier_hz" minVal="20"  maxVal="20000" defaultVal="1000"/>
+  <Float  name="mod_hz"     minVal="0.1" maxVal="2000"  defaultVal="100"/>
+  <Float  name="mod_index"  minVal="0"   maxVal="12"    defaultVal="2"/>
+  <Float  name="amp"        minVal="0"   maxVal="1"     defaultVal="0.5"/>
+  <Phasor name="carrier" freq="carrier_hz"/>
+  <Phasor name="mod"     freq="mod_hz"/>
+  <Expression>amp * sin(carrier + mod_index * sin(mod))</Expression>
 </ParameterSet>

@@ -58,10 +58,13 @@ public:
     // ignored. Allocation-free.
     void setParameterNormalised (int index, double norm01) noexcept;
 
-    // Evaluates the expression at elapsed time `t` (seconds). Allocation-free
-    // and audio-thread safe after a successful compile. Returns 0.0 when no
-    // expression is compiled.
-    double evaluate (double t) noexcept;
+    // Evaluates the expression for one output sample. `t` is elapsed playback
+    // time (seconds); `dt` is the time step since the previous evaluate()
+    // call - the engine integrates each declared phasor by 2*pi*freq*dt. A
+    // backward jump in `t` (transport rewind, playback restart) resets the
+    // phasor accumulators. Allocation-free and audio-thread safe after a
+    // successful compile; returns 0.0 when no expression is compiled.
+    double evaluate (double t, double dt) noexcept;
 
 private:
     struct Impl;

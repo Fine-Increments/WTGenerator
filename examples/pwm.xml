@@ -2,11 +2,13 @@
 
 <!-- Pulse wave with an adjustable duty cycle. `duty` shifts the comparison
      point of the sign function: 0 is a symmetric square, and values either
-     side of 0 narrow the pulse. Automate duty for PWM. -->
+     side of 0 narrow the pulse. Automate duty for PWM, or freq for a
+     click-free pitch sweep. -->
 
 <ParameterSet output-mode="expression" analysis="GenericOverlay">
-  <Float name="freq" minVal="20"    maxVal="8000" defaultVal="500"/>
-  <Float name="duty" minVal="-0.95" maxVal="0.95" defaultVal="0"/>
-  <Float name="amp"  minVal="0"     maxVal="1"    defaultVal="0.5"/>
-  <Expression>amp * sgn(sin(2 * pi * freq * t) - duty)</Expression>
+  <Float  name="freq" minVal="20"    maxVal="8000" defaultVal="500"/>
+  <Float  name="duty" minVal="-0.95" maxVal="0.95" defaultVal="0"/>
+  <Float  name="amp"  minVal="0"     maxVal="1"    defaultVal="0.5"/>
+  <Phasor name="ph" freq="freq"/>
+  <Expression>amp * sgn(sin(ph) - duty)</Expression>
 </ParameterSet>

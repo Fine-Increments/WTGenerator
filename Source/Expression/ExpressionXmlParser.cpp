@@ -80,6 +80,34 @@ juce::String ExpressionXmlParser::validateParameter (
     return {};
 }
 
+juce::String ExpressionXmlParser::validatePhasorName (
+    const juce::String& name,
+    const std::vector<ExpressionParameter>& params,
+    const std::vector<ExpressionPhasor>& phasors)
+{
+    if (name.isEmpty())
+        return "A <Phasor> is missing its name attribute.";
+
+    if (! isValidIdentifier (name))
+        return "Phasor name \"" + name + "\" is not a valid identifier "
+               "(letters, digits and underscore; must not start with a digit).";
+
+    if (isReservedName (name))
+        return "Phasor name \"" + name + "\" is reserved - t, sample_rate, "
+               "pi, e and noise are bound by the engine.";
+
+    for (const auto& p : params)
+        if (p.name == name)
+            return "Phasor name \"" + name + "\" collides with a declared "
+                   "parameter of the same name.";
+
+    for (const auto& other : phasors)
+        if (other.name == name)
+            return "Phasor \"" + name + "\" is declared more than once.";
+
+    return {};
+}
+
 //==============================================================================
 ExpressionParseResult ExpressionXmlParser::parseFile (const juce::File& file)
 {
@@ -119,13 +147,30 @@ ExpressionParseResult ExpressionXmlParser::parseXml (const juce::XmlElement& roo
     ExpressionDefinition def;
     def.analysisTag = root.getStringAttribute ("analysis");
 
-    // ---- Parameters ---------------------------------------------------------
+    // ---- Pass 1: collect parameters, phasors and the expression -------------
+    // Phasor `freq` references are resolved against the parameter set in
+    // pass 2, so a <Phasor> may appear before the parameter it names.
+    struct RawPhasor { juce::String name, freq; };
+    std::vector<RawPhasor>  rawPhasors;
+    const juce::XmlElement* exprElement = nullptr;
+
     for (auto* child : root.getChildIterator())
     {
         const auto tag = child->getTagName();
 
         if (tag == "Expression")
-            continue;   // collected after the loop
+        {
+            if (exprElement == nullptr)
+                exprElement = child;
+            continue;
+        }
+
+        if (tag == "Phasor")
+        {
+            rawPhasors.push_back ({ child->getStringAttribute ("name").trim(),
+                                    child->getStringAttribute ("freq").trim() });
+            continue;
+        }
 
         if (tag == "Int" || tag == "Bool" || tag == "Choice")
             return fail ("Parameter \"" + child->getStringAttribute ("name")
@@ -158,8 +203,43 @@ ExpressionParseResult ExpressionXmlParser::parseXml (const juce::XmlElement& roo
                      + " parameters; the maximum is "
                      + juce::String (kMaxExpressionParameters) + ".");
 
+    // ---- Pass 2: validate and resolve phasors -------------------------------
+    for (const auto& rp : rawPhasors)
+    {
+        if (auto reason = validatePhasorName (rp.name, def.parameters, def.phasors);
+            reason.isNotEmpty())
+            return fail (reason);
+
+        if (rp.freq.isEmpty())
+            return fail ("Phasor \"" + rp.name + "\" has no freq attribute.");
+
+        ExpressionPhasor phasor;
+        phasor.name = rp.name;
+
+        // An identifier (starts with a letter or underscore) names a
+        // parameter; anything else is parsed as a numeric constant.
+        const auto firstChar = rp.freq[0];
+        if (juce::CharacterFunctions::isLetter (firstChar) || firstChar == '_')
+        {
+            bool found = false;
+            for (const auto& param : def.parameters)
+                if (param.name == rp.freq) { found = true; break; }
+
+            if (! found)
+                return fail ("Phasor \"" + rp.name + "\" is driven by \"" + rp.freq
+                             + "\", which is not a declared parameter.");
+
+            phasor.freqParam = rp.freq;
+        }
+        else
+        {
+            phasor.freqConstant = rp.freq.getDoubleValue();
+        }
+
+        def.phasors.push_back (std::move (phasor));
+    }
+
     // ---- Expression ---------------------------------------------------------
-    auto* exprElement = root.getChildByName ("Expression");
     if (exprElement == nullptr)
         return fail ("No <Expression> element found in <ParameterSet>.");
 

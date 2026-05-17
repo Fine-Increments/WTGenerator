@@ -6,9 +6,10 @@
     definition (WTGENERATOR.md section 4.3):
 
       <ParameterSet analysis="GenericOverlay" output-mode="expression">
-        <Float name="carrier_hz" minVal="20" maxVal="20000" defaultVal="1000"/>
+        <Float  name="carrier_hz" minVal="20" maxVal="20000" defaultVal="1000"/>
+        <Phasor name="carrier" freq="carrier_hz"/>
         ...
-        <Expression>sin(2*pi*carrier_hz*t)</Expression>
+        <Expression>sin(carrier)</Expression>
       </ParameterSet>
 
     Stateless - all entry points are static. The parser validates structure
@@ -58,6 +59,13 @@ private:
     // for duplicate-name detection.
     static juce::String validateParameter (const ExpressionParameter& p,
                                            const std::vector<ExpressionParameter>& existing);
+
+    // Returns an empty string when a phasor `name` is valid, or why it is
+    // not. A phasor name must be a fresh identifier - distinct from every
+    // declared parameter and every phasor already accepted.
+    static juce::String validatePhasorName (const juce::String& name,
+                                            const std::vector<ExpressionParameter>& params,
+                                            const std::vector<ExpressionPhasor>& phasors);
 
     static bool isValidIdentifier (const juce::String& s);
     static bool isReservedName    (const juce::String& s);

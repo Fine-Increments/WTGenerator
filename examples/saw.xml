@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!-- Sawtooth, built from the fractional part of (freq * t). Like the
-     square, its discontinuity is band-limited by the oversampler. -->
+<!-- Sawtooth, taken straight from the phasor ramp: the phasor runs 0..2*pi,
+     so ph/pi - 1 is a -1..1 saw. Like the square, its discontinuity is
+     band-limited by the oversampler, and `freq` sweeps click-free. -->
 
 <ParameterSet output-mode="expression" analysis="GenericOverlay">
-  <Float name="freq" minVal="20" maxVal="12000" defaultVal="220"/>
-  <Float name="amp"  minVal="0"  maxVal="1"     defaultVal="0.5"/>
-  <Expression>amp * (2 * frac(freq * t) - 1)</Expression>
+  <Float  name="freq" minVal="20" maxVal="12000" defaultVal="220"/>
+  <Float  name="amp"  minVal="0"  maxVal="1"     defaultVal="0.5"/>
+  <Phasor name="ph" freq="freq"/>
+  <Expression>amp * (ph / pi - 1)</Expression>
 </ParameterSet>

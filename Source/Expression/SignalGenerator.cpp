@@ -106,8 +106,10 @@ void SignalGenerator::process (float* out, int numSamples, bool playing,
         const double osRate    = sampleRate * (double) oversampling.getOversamplingFactor();
         const double invOsRate = 1.0 / osRate;
 
+        // invOsRate is the per-sample time step at the oversampled rate,
+        // which the engine integrates phasors against.
         for (int i = 0; i < osNumSamples; ++i)
-            os[i] = (float) engine->evaluate (startTime + (double) i * invOsRate);
+            os[i] = (float) engine->evaluate (startTime + (double) i * invOsRate, invOsRate);
     }
     else
     {

@@ -88,6 +88,17 @@ private:
     double       sampleRate = 48000.0;
     juce::String lastError;
 
+    // Parameter smoothing state (audio thread only). paramPrev holds each
+    // parameter's value at the end of the previous block; a block linear-
+    // interpolates from it toward the host's current value, so an automated
+    // parameter reads as a smooth ramp rather than a once-per-block
+    // staircase. lastEngine / wasPlaying detect an engine swap or a playback
+    // restart, where the parameters are primed to the host values instead of
+    // ramping from a stale baseline.
+    std::array<float, kMaxExpressionParameters> paramPrev {};
+    ExpressionEngine* lastEngine = nullptr;
+    bool              wasPlaying = false;
+
     // Linear-phase half-band FIR oversampler. Linear phase keeps the test
     // signal's phase relationships intact - it matters for a measurement
     // tool. Integer latency so the host gets a clean sample count.

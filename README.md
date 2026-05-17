@@ -16,18 +16,55 @@ envelope, no polyphony. Its job is a clean reference signal and nothing else.
 
 ## Status
 
-Pre-alpha. **v0 skeleton** - the plugin loads, reports one stereo output bus
-and an optional MIDI input, and emits silence. No signal generation yet; the
-responsive UI shell and the state-persistence path (APVTS) are in place so
-later milestones are additive.
+Pre-alpha. **v1 - expression mode** is working: the plugin generates a live
+test signal from a math expression, with every declared parameter exposed to
+the host for automation.
+
+What works today:
+
+- **Expression mode** - a test signal defined as a closed-form math
+  expression in a small `.xml` file, evaluated live in C++. No Python, no
+  rendering.
+- **Phasors** - declared oscillator phases the engine integrates, so an
+  oscillator's frequency can be automated without clicks.
+- **Automatable parameters** - each declared parameter maps to a host
+  automation slot; sweep it from the DAW at audio rate.
+- **Oversampled anti-aliasing** - the signal is evaluated at 8x and
+  decimated, so discontinuity-rich waveforms (square, saw) stay band-limited.
+- **Transport playback** - free-run, transport-driven; the Standalone build
+  free-runs without a host.
+- **Output gain**, and session save / restore of the loaded definition.
+
+Build it, drop it on a track, and it emits a 1 kHz sine out of the box. Load
+one of the [examples](examples/) to hear more, or write your own - see
+[examples/WRITING_EXPRESSIONS.md](examples/WRITING_EXPRESSIONS.md).
+
+## Expression mode
+
+A test signal is a closed-form function of time, written as plain math:
+
+```xml
+<ParameterSet output-mode="expression">
+  <Float  name="freq" minVal="20" maxVal="20000" defaultVal="1000"/>
+  <Float  name="amp"  minVal="0"  maxVal="1"     defaultVal="0.5"/>
+  <Phasor name="phase" freq="freq"/>
+  <Expression>amp * sin(phase)</Expression>
+</ParameterSet>
+```
+
+WTGenerator parses it, creates a host parameter per `<Float>`, integrates each
+`<Phasor>`, and evaluates the expression per sample on the audio thread. Any
+parameter is automatable; anyone who can write a formula can ship a new test
+signal as a tiny `.xml` with no plugin rebuild. The
+[examples](examples/) folder has square, saw, PWM, FM, AM-noise and chirp
+definitions; [WRITING_EXPRESSIONS.md](examples/WRITING_EXPRESSIONS.md) is the
+authoring reference.
 
 ## Roadmap
 
-- **v0** - Skeleton plugin (this milestone): one output bus, empty
-  processBlock, no parameters.
-- **v1** - Expression mode: closed-form math expressions evaluated live in
-  C++, every declared parameter exposed as a DAW-automatable APVTS value,
-  oversampled for aliasing protection. The primary signal-authoring path.
+- **v0** - Skeleton plugin. *(done)*
+- **v1** - Expression mode: closed-form math, phasors, automatable
+  parameters, oversampled anti-aliasing, transport playback. *(done)*
 - **v2** - Built-in generators: sine, sweeps, two-tone, multisine, Farina
   chirp, impulse, step, tone burst, white/pink/brown noise, MLS, DC, silence,
   plus a curated preset library.
@@ -43,8 +80,8 @@ later milestones are additive.
 WTGenerator is a [Projucer](https://juce.com/download/) project (JUCE 8+,
 C++20). Open `WTGenerator.jucer` in the Projucer, then build the exported
 project (Xcode on macOS). The Projucer regenerates `Builds/` and
-`JuceLibraryCode/`; both are gitignored - only `WTGenerator.jucer` and
-`Source/` are tracked.
+`JuceLibraryCode/`; both are gitignored - only `WTGenerator.jucer`, `Source/`
+and `examples/` are tracked.
 
 The Standalone build runs without a host - useful for offline measurement
 workflows such as batch IR captures and calibration runs.
@@ -54,8 +91,8 @@ workflows such as batch IR captures and calibration runs.
 [WTSynth](https://github.com/getdunne/WTSynth) (Shane Dunne) is the wavetable
 synthesizer that currently serves as the test-signal source for the WTAnalyzer
 workflow. WTGenerator is a strict superset of WTSynth's analysis-relevant
-capabilities: it reads the same `wavetable.wav` files and runs the same Python
-scripts (`<script>.py` plus a sibling `<script>.xml`) unchanged, so existing
-assets keep working. What it adds is free-run transport playback, a neutral
-signal path by default, sample-rate-locked playback, aliasing protection,
-native sidecar JSON, and the expression engine.
+capabilities: it will read the same `wavetable.wav` files and run the same
+Python scripts unchanged (the wavetable / script paths arrive in v3), so
+existing assets keep working. What it adds is free-run transport playback, a
+neutral signal path by default, sample-rate-locked playback, aliasing
+protection, native sidecar JSON, and the expression engine.

@@ -16,7 +16,12 @@ button; its declared parameters appear as sliders in the plugin window and as
 
 ## Writing your own
 
-The schema is a `<ParameterSet output-mode="expression">` root containing:
+Full reference: **[WRITING_EXPRESSIONS.md](WRITING_EXPRESSIONS.md)** - schema,
+the expression vocabulary, the phasor rule, and a troubleshooting section for
+when a definition fails to load.
+
+In brief, the schema is a `<ParameterSet output-mode="expression">` root
+containing:
 
 - one `<Float name="..." minVal="..." maxVal="..." defaultVal="..."/>` per
   automatable parameter;
@@ -28,7 +33,11 @@ The schema is a `<ParameterSet output-mode="expression">` root containing:
 - one `<Expression>` element holding the math.
 
 The expression is a function of the declared parameters and phasors, plus the
-bound names `t` (seconds), `sample_rate`, `pi`, `e`, and `noise()` /
-`noise(seed)` for white noise. Reach for raw `t` only for genuinely
+bound names `t` (seconds), `sample_rate`, `pi`, `e`, and `noise(seed)` for
+white noise (the seed selects the stream; any value works). Reach for raw `t` only for genuinely
 time-based math - chirps, envelopes, ramps - as in `chirp.xml`. If the
 expression uses `<`, `>` or `&`, wrap it in `<![CDATA[ ... ]]>`.
+
+Parameter and phasor names must be valid identifiers and must not clash with
+a built-in math function - so `mod`, `min`, `sin` and the like are off
+limits; the plugin reports a clear error if one does.

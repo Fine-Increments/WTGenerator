@@ -11,7 +11,7 @@
   <Float  name="mod_hz"     minVal="0.1" maxVal="2000"  defaultVal="100"/>
   <Float  name="mod_index"  minVal="0"   maxVal="12"    defaultVal="2"/>
   <Float  name="amp"        minVal="0"   maxVal="1"     defaultVal="0.5"/>
-  <Phasor name="carrier" freq="carrier_hz"/>
-  <Phasor name="mod"     freq="mod_hz"/>
-  <Expression>amp * sin(carrier + mod_index * sin(mod))</Expression>
+  <Phasor name="carrier"   freq="carrier_hz"/>
+  <Phasor name="modulator" freq="mod_hz"/>
+  <Expression>amp * sin(carrier + mod_index * sin(modulator))</Expression>
 </ParameterSet>

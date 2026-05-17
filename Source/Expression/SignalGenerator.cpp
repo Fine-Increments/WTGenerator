@@ -77,15 +77,16 @@ void SignalGenerator::process (float* out, int numSamples, bool playing,
     if (engine == nullptr || ! engine->isCompiled())
     {
         juce::FloatVectorOperations::clear (out, numSamples);
+        lastEngine = engine;
+        wasPlaying = false;
         return;
     }
 
-    // Feed declared parameters from the pool slots into THIS engine - the
-    // same one evaluate() runs below, so a mid-block swap cannot mismatch
-    // parameters against the wrong expression.
-    const int numParams = juce::jmin (engine->getNumParameters(), numPoolValues);
-    for (int i = 0; i < numParams; ++i)
-        engine->setParameterNormalised (i, (double) poolValues[i]);
+    // A changed engine pointer (a definition load) or a playback restart
+    // breaks the parameter history: prime paramPrev to the host values
+    // below rather than ramping the parameters from a stale baseline.
+    const bool primeParams = (engine != lastEngine) || ! wasPlaying;
+    lastEngine = engine;
 
     // Generate at the oversampled rate, then decimate. processSamplesUp
     // returns an AudioBlock over the oversampler's internal buffer; its
@@ -101,20 +102,49 @@ void SignalGenerator::process (float* out, int numSamples, bool playing,
     float*    os           = osBlock.getChannelPointer (0);
     const int osNumSamples = (int) osBlock.getNumSamples();
 
-    if (playing)
+    if (playing && osNumSamples > 0)
     {
-        const double osRate    = sampleRate * (double) oversampling.getOversamplingFactor();
-        const double invOsRate = 1.0 / osRate;
+        const int numParams = juce::jmin (engine->getNumParameters(), numPoolValues);
 
-        // invOsRate is the per-sample time step at the oversampled rate,
-        // which the engine integrates phasors against.
-        for (int i = 0; i < osNumSamples; ++i)
-            os[i] = (float) engine->evaluate (startTime + (double) i * invOsRate, invOsRate);
+        // Prime the smoother baseline on the first block of a new engine or
+        // a fresh playback start - that block holds steady at the host
+        // values instead of ramping.
+        if (primeParams)
+            for (int i = 0; i < numParams; ++i)
+                paramPrev[(size_t) i] = poolValues[i];
+
+        const double osRate     = sampleRate * (double) oversampling.getOversamplingFactor();
+        const double invOsRate  = 1.0 / osRate;
+        const double invOsCount = 1.0 / (double) osNumSamples;
+
+        // Linear-interpolate each declared parameter from its previous-block
+        // value toward the host's current value across the block, so
+        // automation reads as a smooth ramp rather than a once-per-block
+        // staircase. The parameters reach the host value at the block's last
+        // sample. invOsRate doubles as the per-sample time step the engine
+        // integrates phasors against.
+        for (int j = 0; j < osNumSamples; ++j)
+        {
+            const double frac = (double) (j + 1) * invOsCount;
+
+            for (int i = 0; i < numParams; ++i)
+            {
+                const double prev = (double) paramPrev[(size_t) i];
+                const double curr = (double) poolValues[i];
+                engine->setParameterNormalised (i, prev + (curr - prev) * frac);
+            }
+
+            os[j] = (float) engine->evaluate (startTime + (double) j * invOsRate, invOsRate);
+        }
+
+        for (int i = 0; i < numParams; ++i)
+            paramPrev[(size_t) i] = poolValues[i];
     }
     else
     {
         juce::FloatVectorOperations::clear (os, osNumSamples);
     }
 
+    wasPlaying = playing;
     oversampling.processSamplesDown (ioBlock);
 }

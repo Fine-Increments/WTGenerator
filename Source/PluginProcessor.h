@@ -89,6 +89,17 @@ public:
     // diagnostic, for display in the editor.
     juce::String getStatusMessage() const { return statusMessage; }
 
+    // A human-readable description of the active signal source for the
+    // editor's header, formatted "<kind> - <name>". The kind conveys both
+    // the format and whether the source is built-in or user-loaded, so one
+    // label slot serves every mode. v1 implements expression mode only:
+    //   "Built-in expression - Sine"  - the baked-in default
+    //   "Expression file - <name>"    - a user-loaded .xml
+    // Later milestones extend the branching HERE, not in the editor - see
+    // WTGENERATOR.md section 10.4 for the full taxonomy (built-in
+    // generators in v2, wavetable / render files in v3).
+    juce::String getSignalSourceLabel() const;
+
     // Sample rate captured during prepareToPlay. Generators compute their
     // frequencies against this so output is rate-correct at 44.1/48/96/192 kHz
     // (WTGENERATOR.md section 7.3). Atomic so the editor can read it too.

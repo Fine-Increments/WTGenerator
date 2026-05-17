@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!-- Amplitude-modulated white noise, showing the noise() function. The
+<!-- Amplitude-modulated white noise, showing the noise(seed) function. The
      noise stream is gated by a unipolar sine LFO whose phase is a phasor,
-     so `rate` can be swept click-free. White noise stays on the expression
-     path because the PRNG state hides inside noise() (WTGENERATOR.md
-     section 4.3). -->
+     so `rate` can be swept click-free. noise() always takes a seed - it
+     selects the stream; any value works for plain white noise. White noise
+     stays on the expression path because the PRNG state hides inside
+     noise() (WTGENERATOR.md section 4.3). -->
 
 <ParameterSet output-mode="expression" analysis="GenericOverlay">
   <Float  name="rate" minVal="0.1" maxVal="50" defaultVal="4"/>
   <Float  name="amp"  minVal="0"   maxVal="1"  defaultVal="0.5"/>
   <Phasor name="lfo" freq="rate"/>
-  <Expression>amp * noise() * (0.5 + 0.5 * sin(lfo))</Expression>
+  <Expression>amp * noise(1) * (0.5 + 0.5 * sin(lfo))</Expression>
 </ParameterSet>

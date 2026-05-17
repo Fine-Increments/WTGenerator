@@ -24,9 +24,6 @@
 //==============================================================================
 namespace
 {
-    // Default stream identifier for the no-argument noise() call.
-    constexpr std::uint64_t kDefaultNoiseSeed = 0x6A09E667F3BCC908ull;
-
     // SplitMix64 finaliser, mapped to a uniform sample in [-1, 1). White
     // noise is a pure function of (seed, sample index) - no retained PRNG
     // state - so noise() and noise(seed) are reproducible run to run: the
@@ -41,34 +38,28 @@ namespace
     }
 
     //==========================================================================
-    // The noise() / noise(seed) expression function (WTGENERATOR.md section
-    // 4.3). Registered as a generic (variadic) function so one object serves
-    // both the zero-argument and seeded forms. The "PRNG state" is just the
-    // playback position: the sample index is derived from the engine's bound
-    // t and sample_rate, so nothing is retained between calls.
-    struct NoiseFunction : public exprtk::igeneric_function<double>
+    // The noise(seed) expression function (WTGENERATOR.md section 4.3).
+    // ExprTk has no usable zero-argument function form - a zero-parameter
+    // call to a generic function is rejected outright (ERR137) - so noise
+    // always takes a seed. The seed selects a reproducible stream; the
+    // "PRNG state" is just the playback position, the sample index derived
+    // from the engine's bound t and sample_rate, so nothing is retained
+    // between calls.
+    struct NoiseFunction : public exprtk::ifunction<double>
     {
-        typedef exprtk::igeneric_function<double> Base;
-        typedef Base::parameter_list_t            parameter_list_t;
-        typedef Base::generic_type                generic_type;
-        typedef generic_type::scalar_view         scalar_t;
-
-        NoiseFunction() : Base() {}   // default ctor -> fully variadic
+        NoiseFunction() : exprtk::ifunction<double> (1) {}   // arity 1: noise(seed)
 
         // Pointers into the owning Impl's bound t / sample_rate. Set once,
         // after Impl construction; the targets outlive this object.
         const double* timePtr = nullptr;
         const double* ratePtr = nullptr;
 
-        inline double operator() (parameter_list_t parameters) override
+        inline double operator() (const double& seedArg) override
         {
             const double tNow = (timePtr != nullptr) ? *timePtr : 0.0;
             const double sr   = (ratePtr != nullptr) ? *ratePtr : 48000.0;
             const auto index  = (std::uint64_t) (std::int64_t) std::llround (tNow * sr);
-
-            std::uint64_t seed = kDefaultNoiseSeed;
-            if (parameters.size() >= 1)
-                seed = (std::uint64_t) (std::int64_t) scalar_t (parameters[0])();
+            const auto seed   = (std::uint64_t) (std::int64_t) seedArg;
 
             return hashToUnit (seed * 0xD1B54A32D192ED03ull
                                + index * 0x9E3779B97F4A7C15ull);
@@ -207,7 +198,10 @@ bool ExpressionEngine::compile (const ExpressionDefinition& definition, double s
 
     m.compiled = m.parser.compile (definition.expression.toStdString(), m.expression);
     if (! m.compiled)
-        m.lastError = m.parser.error();
+        // Prefixed so the editor's status line distinguishes a math-compile
+        // failure from a structural / declaration error - they need
+        // different fixes. See examples/WRITING_EXPRESSIONS.md.
+        m.lastError = "Expression error: " + m.parser.error();
 
     return m.compiled;
 }

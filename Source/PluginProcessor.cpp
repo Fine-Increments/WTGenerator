@@ -102,6 +102,17 @@ bool WTGeneratorAudioProcessor::loadExpressionFileInternal (const juce::File& fi
     return true;
 }
 
+juce::String WTGeneratorAudioProcessor::getSignalSourceLabel() const
+{
+    // v1 is expression mode only - processBlock emits silence for other
+    // generatorMode values. v2 / v3 wrap this in a switch on generatorMode,
+    // adding a branch per mode (WTGENERATOR.md section 10.4).
+    if (loadedFile == juce::File())
+        return "Built-in expression - Sine";
+
+    return "Expression file - " + loadedFile.getFileName();
+}
+
 WTGeneratorAudioProcessor::~WTGeneratorAudioProcessor()
 {
 }

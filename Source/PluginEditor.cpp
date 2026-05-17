@@ -83,10 +83,7 @@ void WTGeneratorAudioProcessorEditor::refreshFromProcessor()
 {
     paramPanel.setDefinition (audioProcessor.signalGenerator.getDefinition());
 
-    const auto file = audioProcessor.getLoadedFile();
-    fileLabel.setText (file == juce::File() ? juce::String ("Default expression")
-                                            : file.getFileName(),
-                       juce::dontSendNotification);
+    fileLabel.setText (audioProcessor.getSignalSourceLabel(), juce::dontSendNotification);
 
     statusLabel.setText (audioProcessor.getStatusMessage(), juce::dontSendNotification);
 

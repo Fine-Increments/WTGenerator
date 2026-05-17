@@ -16,9 +16,19 @@ button; its declared parameters appear as sliders in the plugin window and as
 
 ## Writing your own
 
-The schema is a `<ParameterSet output-mode="expression">` root with one
-`<Float name="..." minVal="..." maxVal="..." defaultVal="..."/>` per parameter
-and one `<Expression>` element holding the math. The expression is a closed-form
-function of `t` (seconds) plus the declared parameters; `sample_rate`, `pi` and
-`e` are also bound, and `noise()` / `noise(seed)` give white noise. If the
+The schema is a `<ParameterSet output-mode="expression">` root containing:
+
+- one `<Float name="..." minVal="..." maxVal="..." defaultVal="..."/>` per
+  automatable parameter;
+- a `<Phasor name="..." freq="..."/>` for each oscillator - `freq` names a
+  declared parameter (or is a numeric constant). A phasor is an
+  engine-integrated phase running `0 .. 2*pi`, so `sin(name)` is a sine and
+  `name/pi - 1` a sawtooth. Build any oscillator whose pitch you might
+  automate on a phasor, or changing the frequency will click;
+- one `<Expression>` element holding the math.
+
+The expression is a function of the declared parameters and phasors, plus the
+bound names `t` (seconds), `sample_rate`, `pi`, `e`, and `noise()` /
+`noise(seed)` for white noise. Reach for raw `t` only for genuinely
+time-based math - chirps, envelopes, ramps - as in `chirp.xml`. If the
 expression uses `<`, `>` or `&`, wrap it in `<![CDATA[ ... ]]>`.

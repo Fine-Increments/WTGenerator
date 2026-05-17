@@ -1,9 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <!-- Linear chirp - the instantaneous frequency rises by `rate` Hz every
-     second, starting from `f0`. An aperiodic signal: a closed-form
-     function of t that a cyclic wavetable cannot represent at all. Best
-     driven by the host transport, where t (and so the sweep) resets to
+     second, starting from `f0`. An aperiodic signal: a closed-form function
+     of t that a cyclic wavetable cannot represent at all.
+
+     This is the deliberate raw-`t` example: the swept phase is continuous
+     by construction (f0*t + 0.5*rate*t*t is the integral of the linearly
+     rising frequency), so no phasor is needed. Raw `t` is the right tool
+     for genuinely time-based math - sweeps, envelopes, ramps - whereas a
+     fixed-frequency oscillator whose pitch you automate wants a <Phasor>.
+     Best driven by the host transport, where t (and the sweep) resets to
      zero on rewind. -->
 
 <ParameterSet output-mode="expression" analysis="GenericOverlay">

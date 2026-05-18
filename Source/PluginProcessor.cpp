@@ -274,16 +274,20 @@ WTGeneratorAudioProcessor::createParameterLayout()
         juce::ParameterID { "multisinePhase", 1 }, "Multisine Phase",
         juce::StringArray { "Zero", "Random", "Schroeder" }, 2));
 
-    // Chirp (Farina).
+    // Chirp (Farina). Ranges deliberately match WTAnalyzer's Farina IR mode
+    // (its FarinaIR kMin/kMax sweep constants: 5-20000 Hz start, 10-24000 Hz
+    // end, 0.1-30 s) so a chirp configured here is always reproducible by
+    // the analyzer's deconvolution - nothing is silently clamped on the
+    // analysis side. The general Sine Sweep keeps its own wider ranges.
     layout.add (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "chirpStartHz", 1 }, "Chirp Start (Hz)",
-        freqRange (20.0f, 20000.0f), 20.0f));
+        freqRange (5.0f, 20000.0f), 20.0f));
     layout.add (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "chirpEndHz", 1 }, "Chirp End (Hz)",
-        freqRange (20.0f, 20000.0f), 20000.0f));
+        freqRange (10.0f, 24000.0f), 20000.0f));
     layout.add (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "chirpDuration", 1 }, "Chirp Duration (s)",
-        juce::NormalisableRange<float> (0.1f, 60.0f), 5.0f));
+        juce::NormalisableRange<float> (0.1f, 30.0f), 5.0f));
 
     // Impulse.
     layout.add (std::make_unique<juce::AudioParameterChoice> (

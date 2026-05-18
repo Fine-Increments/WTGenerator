@@ -10,6 +10,10 @@
 #include "SignalGenerator.h"
 #include "DefaultExpression.h"
 #include "../BuiltIn/SineGenerator.h"
+#include "../BuiltIn/SteadyGenerators.h"
+#include "../BuiltIn/SweptGenerators.h"
+#include "../BuiltIn/TriggeredGenerators.h"
+#include "../BuiltIn/StatefulGenerators.h"
 
 //==============================================================================
 SignalGenerator::SignalGenerator (juce::AudioProcessorValueTreeState& apvts)
@@ -18,10 +22,22 @@ SignalGenerator::SignalGenerator (juce::AudioProcessorValueTreeState& apvts)
     // it is compiled into an engine by the first prepare() call.
     definition = getDefaultExpression();
 
-    // Built-in generators (WTGENERATOR.md section 4.4). Each caches its own
-    // APVTS parameter pointers. Slots 1-13 are filled in over v2 steps
-    // 3b-6; an unfilled slot renders silence.
-    builtInGenerators[0] = std::make_unique<SineGenerator> (apvts);
+    // Built-in generators (WTGENERATOR.md section 4.4), one per builtInGenerator
+    // Choice value. Each caches its own APVTS parameter pointers.
+    builtInGenerators[ 0] = std::make_unique<SineGenerator>       (apvts);
+    builtInGenerators[ 1] = std::make_unique<SineSweepGenerator>  (apvts);
+    builtInGenerators[ 2] = std::make_unique<TwoToneGenerator>    (apvts);
+    builtInGenerators[ 3] = std::make_unique<MultisineGenerator>  (apvts);
+    builtInGenerators[ 4] = std::make_unique<ChirpGenerator>      (apvts);
+    builtInGenerators[ 5] = std::make_unique<ImpulseGenerator>    (apvts);
+    builtInGenerators[ 6] = std::make_unique<StepGenerator>       (apvts);
+    builtInGenerators[ 7] = std::make_unique<ToneBurstGenerator>  (apvts);
+    builtInGenerators[ 8] = std::make_unique<WhiteNoiseGenerator> (apvts);
+    builtInGenerators[ 9] = std::make_unique<PinkNoiseGenerator>  (apvts);
+    builtInGenerators[10] = std::make_unique<BrownNoiseGenerator> (apvts);
+    builtInGenerators[11] = std::make_unique<MlsGenerator>        (apvts);
+    builtInGenerators[12] = std::make_unique<DcGenerator>         (apvts);
+    builtInGenerators[13] = std::make_unique<SilenceGenerator>    ();
 }
 
 void SignalGenerator::prepare (double newSampleRate, int maxBlockSize)

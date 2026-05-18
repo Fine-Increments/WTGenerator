@@ -21,6 +21,10 @@
             file="Source/DynamicParameterPanel.cpp"/>
       <FILE id="DyPp02" name="DynamicParameterPanel.h" compile="0" resource="0"
             file="Source/DynamicParameterPanel.h"/>
+      <FILE id="BiPp01" name="BuiltInParameterPanel.cpp" compile="1" resource="0"
+            file="Source/BuiltInParameterPanel.cpp"/>
+      <FILE id="BiPp02" name="BuiltInParameterPanel.h" compile="0" resource="0"
+            file="Source/BuiltInParameterPanel.h"/>
       <GROUP id="{2F1A6C3E-9B47-4D58-A0E2-7C9F1B3D6A84}" name="Expression">
         <FILE id="ExDx01" name="DefaultExpression.h" compile="0" resource="0"
               file="Source/Expression/DefaultExpression.h"/>
@@ -46,6 +50,26 @@
               file="Source/BuiltIn/SineGenerator.cpp"/>
         <FILE id="BiSn02" name="SineGenerator.h" compile="0" resource="0"
               file="Source/BuiltIn/SineGenerator.h"/>
+        <FILE id="BiSt01" name="SteadyGenerators.cpp" compile="1" resource="0"
+              file="Source/BuiltIn/SteadyGenerators.cpp"/>
+        <FILE id="BiSt02" name="SteadyGenerators.h" compile="0" resource="0"
+              file="Source/BuiltIn/SteadyGenerators.h"/>
+        <FILE id="BiSw01" name="SweptGenerators.cpp" compile="1" resource="0"
+              file="Source/BuiltIn/SweptGenerators.cpp"/>
+        <FILE id="BiSw02" name="SweptGenerators.h" compile="0" resource="0"
+              file="Source/BuiltIn/SweptGenerators.h"/>
+        <FILE id="BiTr01" name="TriggeredGenerators.cpp" compile="1" resource="0"
+              file="Source/BuiltIn/TriggeredGenerators.cpp"/>
+        <FILE id="BiTr02" name="TriggeredGenerators.h" compile="0" resource="0"
+              file="Source/BuiltIn/TriggeredGenerators.h"/>
+        <FILE id="BiSf01" name="StatefulGenerators.cpp" compile="1" resource="0"
+              file="Source/BuiltIn/StatefulGenerators.cpp"/>
+        <FILE id="BiSf02" name="StatefulGenerators.h" compile="0" resource="0"
+              file="Source/BuiltIn/StatefulGenerators.h"/>
+        <FILE id="BiPl01" name="PresetLibrary.cpp" compile="1" resource="0"
+              file="Source/BuiltIn/PresetLibrary.cpp"/>
+        <FILE id="BiPl02" name="PresetLibrary.h" compile="0" resource="0"
+              file="Source/BuiltIn/PresetLibrary.h"/>
       </GROUP>
     </GROUP>
   </MAINGROUP>

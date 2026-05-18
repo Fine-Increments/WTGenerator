@@ -9,10 +9,12 @@
 
 #include "PluginEditor.h"
 #include "Colors.h"
+#include "BuiltIn/PresetLibrary.h"
 
 //==============================================================================
 WTGeneratorAudioProcessorEditor::WTGeneratorAudioProcessorEditor (WTGeneratorAudioProcessor& p)
-    : AudioProcessorEditor (&p), audioProcessor (p), paramPanel (p)
+    : AudioProcessorEditor (&p), audioProcessor (p),
+      paramPanel (p), builtInPanel (p.apvts)
 {
     setLookAndFeel (&lookAndFeel);
 
@@ -33,6 +35,10 @@ WTGeneratorAudioProcessorEditor::WTGeneratorAudioProcessorEditor (WTGeneratorAud
     paramViewport.setScrollBarsShown (true, false);
     addAndMakeVisible (paramViewport);
 
+    builtInViewport.setViewedComponent (&builtInPanel, false);
+    builtInViewport.setScrollBarsShown (true, false);
+    addAndMakeVisible (builtInViewport);
+
     triggerLabel.setColour (juce::Label::textColourId, WTColors::textDim);
     addAndMakeVisible (triggerLabel);
 
@@ -44,6 +50,27 @@ WTGeneratorAudioProcessorEditor::WTGeneratorAudioProcessorEditor (WTGeneratorAud
     addAndMakeVisible (triggerBox);
     triggerAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
         audioProcessor.apvts, "playbackTrigger", triggerBox);
+
+    repeatLabel.setColour (juce::Label::textColourId, WTColors::textDim);
+    addAndMakeVisible (repeatLabel);
+
+    // Item IDs 1..3 match the oneShot ("Repeat Mode") choice order.
+    repeatBox.addItem ("Loop",     1);
+    repeatBox.addItem ("One-Shot", 2);
+    repeatBox.addItem ("Periodic", 3);
+    addAndMakeVisible (repeatBox);
+    repeatAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
+        audioProcessor.apvts, "oneShot", repeatBox);
+
+    periodicRateLabel.setColour (juce::Label::textColourId, WTColors::textDim);
+    addAndMakeVisible (periodicRateLabel);
+
+    periodicRateSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    periodicRateSlider.setTextValueSuffix (" Hz");
+    periodicRateSlider.setNumDecimalPlacesToDisplay (2);
+    addAndMakeVisible (periodicRateSlider);
+    periodicRateAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
+        audioProcessor.apvts, "periodicRate", periodicRateSlider);
 
     gainLabel.setColour (juce::Label::textColourId, WTColors::textDim);
     addAndMakeVisible (gainLabel);
@@ -76,7 +103,36 @@ WTGeneratorAudioProcessorEditor::WTGeneratorAudioProcessorEditor (WTGeneratorAud
     builtInGeneratorAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
         audioProcessor.apvts, "builtInGenerator", builtInGeneratorBox);
 
-    generatorModeParam = audioProcessor.apvts.getRawParameterValue ("generatorMode");
+    // Preset picker - the curated library (WTGENERATOR.md section 8.5).
+    // Item IDs are 1-based preset indices; section headings carry no ID and
+    // are not selectable. The placeholder text shows while nothing is chosen.
+    {
+        const auto& presets = BuiltInPresets::library();
+        juce::String currentCategory;
+        for (int i = 0; i < (int) presets.size(); ++i)
+        {
+            if (presets[(size_t) i].category != currentCategory)
+            {
+                currentCategory = presets[(size_t) i].category;
+                presetBox.addSectionHeading (currentCategory);
+            }
+            presetBox.addItem (presets[(size_t) i].name, i + 1);
+        }
+    }
+    presetBox.setTextWhenNothingSelected ("Presets");
+    presetBox.onChange = [this] { applySelectedPreset(); };
+    addAndMakeVisible (presetBox);
+
+    generatorModeParam    = audioProcessor.apvts.getRawParameterValue ("generatorMode");
+    builtInGeneratorParam = audioProcessor.apvts.getRawParameterValue ("builtInGenerator");
+    oneShotParam          = audioProcessor.apvts.getRawParameterValue ("oneShot");
+
+    // Periodic Rate only bites in Periodic repeat mode - grey it out otherwise.
+    if (oneShotParam != nullptr)
+    {
+        lastRepeatMode = (int) oneShotParam->load();
+        periodicRateSlider.setEnabled (lastRepeatMode == 2);   // 2 = Periodic
+    }
 
     audioProcessor.addChangeListener (this);
 
@@ -107,12 +163,34 @@ void WTGeneratorAudioProcessorEditor::changeListenerCallback (juce::ChangeBroadc
 
 void WTGeneratorAudioProcessorEditor::timerCallback()
 {
-    // Follow generatorMode changes from any source - the selector, host
-    // automation, a preset load - and swap the mode-specific UI.
+    // Follow generatorMode / builtInGenerator changes from any source - the
+    // selectors, host automation, a preset load - and update the UI.
     const int mode = (generatorModeParam != nullptr)
                         ? (int) generatorModeParam->load() : 0;
     if (mode != lastGeneratorMode)
+    {
         updateModeVisibility();
+        return;
+    }
+
+    const int generator = (builtInGeneratorParam != nullptr)
+                            ? (int) builtInGeneratorParam->load() : 0;
+    if (generator != lastBuiltInGenerator)
+    {
+        lastBuiltInGenerator = generator;
+        builtInPanel.setGenerator (generator);
+        resized();
+    }
+
+    // Follow Repeat Mode from any source (the selector, a preset, host
+    // automation) and enable Periodic Rate only while it is Periodic.
+    const int repeatMode = (oneShotParam != nullptr)
+                             ? (int) oneShotParam->load() : 0;
+    if (repeatMode != lastRepeatMode)
+    {
+        lastRepeatMode = repeatMode;
+        periodicRateSlider.setEnabled (repeatMode == 2);   // 2 = Periodic
+    }
 }
 
 void WTGeneratorAudioProcessorEditor::updateModeVisibility()
@@ -130,9 +208,20 @@ void WTGeneratorAudioProcessorEditor::updateModeVisibility()
     statusLabel.setVisible   (expression);
     paramViewport.setVisible (expression);
 
-    // Built-in-mode controls. The per-generator parameter panel arrives in
-    // the next sub-step; Built-in mode currently shows just the selector.
+    // Built-in-mode controls.
     builtInGeneratorBox.setVisible (builtIn);
+    presetBox.setVisible           (builtIn);
+    builtInViewport.setVisible     (builtIn);
+
+    if (builtIn)
+    {
+        const int generator = (builtInGeneratorParam != nullptr)
+                                ? (int) builtInGeneratorParam->load() : 0;
+        lastBuiltInGenerator = generator;
+        builtInPanel.setGenerator (generator);
+    }
+
+    resized();
 }
 
 void WTGeneratorAudioProcessorEditor::refreshFromProcessor()
@@ -163,6 +252,19 @@ void WTGeneratorAudioProcessorEditor::chooseExpressionFile()
         });
 }
 
+void WTGeneratorAudioProcessorEditor::applySelectedPreset()
+{
+    const int id = presetBox.getSelectedId();
+    if (id <= 0)
+        return;   // a section heading, or the cleared placeholder
+
+    BuiltInPresets::apply (audioProcessor.apvts, id - 1);
+
+    // Snap back to the placeholder so picking the same preset again re-applies
+    // it; dontSendNotification keeps this from re-entering onChange.
+    presetBox.setSelectedId (0, juce::dontSendNotification);
+}
+
 //==============================================================================
 void WTGeneratorAudioProcessorEditor::paint (juce::Graphics& g)
 {
@@ -190,10 +292,14 @@ void WTGeneratorAudioProcessorEditor::resized()
     area.removeFromTop (sx (8));
 
     // Mode-specific action row: Load Expression... (Expression mode) or the
-    // Built-in Generator selector (Built-in mode) - one slot, one visible.
-    auto actionRect = area.removeFromTop (sx (26)).removeFromLeft (sx (180));
+    // Built-in Generator selector plus the preset picker (Built-in mode) -
+    // the leftmost slot is shared, one control visible at a time.
+    auto actionRow  = area.removeFromTop (sx (26));
+    auto actionRect = actionRow.removeFromLeft (sx (180));
     loadButton.setBounds          (actionRect);
     builtInGeneratorBox.setBounds (actionRect);
+    actionRow.removeFromLeft (sx (8));
+    presetBox.setBounds (actionRow.removeFromLeft (sx (220)));
 
     area.removeFromTop (sx (8));
     fileLabel.setBounds (area.removeFromTop (sx (20)));
@@ -201,25 +307,45 @@ void WTGeneratorAudioProcessorEditor::resized()
     area.removeFromTop (sx (4));
     statusLabel.setBounds (area.removeFromTop (sx (34)));
 
-    auto bottom = area.removeFromBottom (sx (50));
+    auto bottom = area.removeFromBottom (sx (100));
     {
-        auto left = bottom.removeFromLeft (bottom.getWidth() / 2).reduced (sx (4), 0);
-        triggerLabel.setBounds (left.removeFromTop (sx (20)));
-        triggerBox.setBounds   (left.removeFromTop (sx (24)));
+        // Row 1: Playback Trigger | Repeat Mode.
+        auto row1 = bottom.removeFromTop (sx (50));
+        auto tl   = row1.removeFromLeft (row1.getWidth() / 2).reduced (sx (4), 0);
+        triggerLabel.setBounds (tl.removeFromTop (sx (20)));
+        triggerBox.setBounds   (tl.removeFromTop (sx (24)));
 
-        auto right = bottom.reduced (sx (4), 0);
-        gainLabel.setBounds  (right.removeFromTop (sx (20)));
-        gainSlider.setBounds (right.removeFromTop (sx (24)));
+        auto tr = row1.reduced (sx (4), 0);
+        repeatLabel.setBounds (tr.removeFromTop (sx (20)));
+        repeatBox.setBounds   (tr.removeFromTop (sx (24)));
+
+        // Row 2: Periodic Rate | Output Gain.
+        auto row2 = bottom;
+        auto bl   = row2.removeFromLeft (row2.getWidth() / 2).reduced (sx (4), 0);
+        periodicRateLabel.setBounds  (bl.removeFromTop (sx (20)));
+        periodicRateSlider.setBounds (bl.removeFromTop (sx (24)));
+        periodicRateSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, sx (56), sx (18));
+
+        auto br = row2.reduced (sx (4), 0);
+        gainLabel.setBounds  (br.removeFromTop (sx (20)));
+        gainSlider.setBounds (br.removeFromTop (sx (24)));
         gainSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, sx (56), sx (18));
     }
 
     area.removeFromTop    (sx (8));
     area.removeFromBottom (sx (8));
 
-    paramViewport.setBounds (area);
+    // Main panel area - one viewport per mode, same bounds, one visible.
+    paramViewport.setBounds   (area);
+    builtInViewport.setBounds (area);
 
     paramPanel.setUiScale (scale());
     paramPanel.setSize (juce::jmax (paramViewport.getWidth() - sx (12), sx (10)),
                         juce::jmax (paramViewport.getHeight(),
                                     paramPanel.getRequiredHeight()));
+
+    builtInPanel.setUiScale (scale());
+    builtInPanel.setSize (juce::jmax (builtInViewport.getWidth() - sx (12), sx (10)),
+                          juce::jmax (builtInViewport.getHeight(),
+                                      builtInPanel.getRequiredHeight()));
 }

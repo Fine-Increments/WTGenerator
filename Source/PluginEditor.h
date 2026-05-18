@@ -21,6 +21,7 @@
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 #include "DynamicParameterPanel.h"
+#include "BuiltInParameterPanel.h"
 
 //==============================================================================
 // LookAndFeel that scales JUCE-owned fonts (TextButton, ComboBox, Label, and
@@ -85,6 +86,10 @@ private:
     // Shows the controls for the active generator mode and hides the rest.
     void updateModeVisibility();
 
+    // Applies the preset chosen in presetBox, then clears the selection so
+    // the same preset can be picked again.
+    void applySelectedPreset();
+
     float scale() const noexcept
     {
         return juce::jmin ((float) getWidth()  / (float) kBaseWidth,
@@ -97,17 +102,24 @@ private:
     WTGeneratorAudioProcessor& audioProcessor;
     WTLookAndFeel lookAndFeel;
 
-    // Generator-mode selector (header, always visible) and the Built-in
-    // generator selector (shown only in Built-in mode).
+    // Generator-mode selector (header, always visible), the Built-in
+    // generator selector and the preset picker (both shown only in Built-in
+    // mode). presetBox is a momentary action, not a bound parameter - it
+    // writes a curated parameter set and snaps back to its placeholder.
     juce::ComboBox generatorModeBox;
     juce::ComboBox builtInGeneratorBox;
+    juce::ComboBox presetBox;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> generatorModeAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> builtInGeneratorAttachment;
 
-    // generatorMode is polled (the timer) so the UI follows host-driven
-    // changes too, not just clicks on the selector.
-    std::atomic<float>* generatorModeParam = nullptr;
-    int lastGeneratorMode = -1;
+    // generatorMode / builtInGenerator are polled (the timer) so the UI
+    // follows host-driven changes too, not just clicks on the selectors.
+    std::atomic<float>* generatorModeParam    = nullptr;
+    std::atomic<float>* builtInGeneratorParam = nullptr;
+    std::atomic<float>* oneShotParam          = nullptr;
+    int lastGeneratorMode    = -1;
+    int lastBuiltInGenerator = -1;
+    int lastRepeatMode       = -1;
 
     // Header.
     juce::TextButton loadButton { "Load Expression..." };
@@ -117,14 +129,27 @@ private:
     juce::Label fileLabel;
     juce::Label statusLabel;
 
-    // Dynamic parameter sliders, scrolled when they exceed the panel area.
+    // Expression-mode parameter sliders, and Built-in-mode parameter
+    // controls - one viewport per mode, same bounds, one visible at a time.
     juce::Viewport        paramViewport;
     DynamicParameterPanel paramPanel;
+    juce::Viewport        builtInViewport;
+    BuiltInParameterPanel builtInPanel;
 
-    // Playback controls.
+    // Playback controls. Repeat Mode and Periodic Rate are global, like
+    // Playback Trigger - shown in both generator modes. Periodic Rate is
+    // greyed out unless Repeat Mode is Periodic, the only mode it affects.
     juce::Label    triggerLabel { {}, "Playback Trigger" };
     juce::ComboBox triggerBox;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> triggerAttachment;
+
+    juce::Label    repeatLabel { {}, "Repeat Mode" };
+    juce::ComboBox repeatBox;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> repeatAttachment;
+
+    juce::Label  periodicRateLabel { {}, "Periodic Rate" };
+    juce::Slider periodicRateSlider;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> periodicRateAttachment;
 
     juce::Label  gainLabel { {}, "Output Gain" };
     juce::Slider gainSlider;

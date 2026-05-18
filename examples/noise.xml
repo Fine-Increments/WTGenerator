@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Plain, unmodulated white noise - the noise(seed) function on its own.
+     The seed selects the stream; any value works. For amplitude-modulated
+     noise see am_noise.xml. -->
+
+<ParameterSet output-mode="expression" analysis="GenericOverlay">
+  <Float name="amp" minVal="0" maxVal="1" defaultVal="0.5"/>
+  <Expression>amp * noise(1)</Expression>
+</ParameterSet>

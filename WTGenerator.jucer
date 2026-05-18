@@ -39,6 +39,14 @@
         <FILE id="ExSg02" name="SignalGenerator.h" compile="0" resource="0"
               file="Source/Expression/SignalGenerator.h"/>
       </GROUP>
+      <GROUP id="{3C8E1F5A-2D74-4B6E-9A1F-8E2D7C4B5A60}" name="BuiltIn">
+        <FILE id="BiGn01" name="BuiltInGenerator.h" compile="0" resource="0"
+              file="Source/BuiltIn/BuiltInGenerator.h"/>
+        <FILE id="BiSn01" name="SineGenerator.cpp" compile="1" resource="0"
+              file="Source/BuiltIn/SineGenerator.cpp"/>
+        <FILE id="BiSn02" name="SineGenerator.h" compile="0" resource="0"
+              file="Source/BuiltIn/SineGenerator.h"/>
+      </GROUP>
     </GROUP>
   </MAINGROUP>
   <MODULES>

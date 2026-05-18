@@ -57,7 +57,8 @@ private:
 
 //==============================================================================
 class WTGeneratorAudioProcessorEditor  : public juce::AudioProcessorEditor,
-                                         private juce::ChangeListener
+                                         private juce::ChangeListener,
+                                         private juce::Timer
 {
 public:
     // The layout in paint()/resized() is authored at this size; every pixel
@@ -77,8 +78,12 @@ public:
 
 private:
     void changeListenerCallback (juce::ChangeBroadcaster*) override;
+    void timerCallback() override;
     void refreshFromProcessor();
     void chooseExpressionFile();
+
+    // Shows the controls for the active generator mode and hides the rest.
+    void updateModeVisibility();
 
     float scale() const noexcept
     {
@@ -91,6 +96,18 @@ private:
 
     WTGeneratorAudioProcessor& audioProcessor;
     WTLookAndFeel lookAndFeel;
+
+    // Generator-mode selector (header, always visible) and the Built-in
+    // generator selector (shown only in Built-in mode).
+    juce::ComboBox generatorModeBox;
+    juce::ComboBox builtInGeneratorBox;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> generatorModeAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> builtInGeneratorAttachment;
+
+    // generatorMode is polled (the timer) so the UI follows host-driven
+    // changes too, not just clicks on the selector.
+    std::atomic<float>* generatorModeParam = nullptr;
+    int lastGeneratorMode = -1;
 
     // Header.
     juce::TextButton loadButton { "Load Expression..." };

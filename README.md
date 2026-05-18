@@ -56,9 +56,9 @@ WTGenerator parses it, creates a host parameter per `<Float>`, integrates each
 `<Phasor>`, and evaluates the expression per sample on the audio thread. Any
 parameter is automatable; anyone who can write a formula can ship a new test
 signal as a tiny `.xml` with no plugin rebuild. The
-[examples](examples/) folder has square, saw, PWM, FM, AM-noise and chirp
-definitions; [WRITING_EXPRESSIONS.md](examples/WRITING_EXPRESSIONS.md) is the
-authoring reference.
+[examples](examples/) folder has worked definitions - square, saw, PWM, FM,
+noise and chirp; [WRITING_EXPRESSIONS.md](examples/WRITING_EXPRESSIONS.md) is
+the authoring reference.
 
 ## Roadmap
 
@@ -88,9 +88,8 @@ workflows such as batch IR captures and calibration runs.
 
 ## Relationship to WTSynth
 
-[WTSynth](https://github.com/getdunne/WTSynth) (Shane Dunne) is the wavetable
-synthesizer that currently serves as the test-signal source for the WTAnalyzer
-workflow. WTGenerator is a strict superset of WTSynth's analysis-relevant
+WTSynth (Shane Dunne) is the wavetable synthesizer that currently serves as
+the test-signal source for the WTAnalyzer workflow. WTGenerator is a strict superset of WTSynth's analysis-relevant
 capabilities: it will read the same `wavetable.wav` files and run the same
 Python scripts unchanged (the wavetable / script paths arrive in v3), so
 existing assets keep working. What it adds is free-run transport playback, a

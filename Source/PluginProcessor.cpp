@@ -18,6 +18,13 @@ namespace
     // path across session save / load (WTGENERATOR.md section 9.3).
     const juce::Identifier kExpressionStateTag { "expressionState" };
     const juce::Identifier kFilePathProperty   { "filePath" };
+
+    // A frequency parameter range with a log-style skew, so the lower
+    // octaves of the audio band keep usable knob / automation resolution.
+    juce::NormalisableRange<float> freqRange (float minHz, float maxHz)
+    {
+        return { minHz, maxHz, 0.0f, 0.30f };
+    }
 }
 
 //==============================================================================
@@ -28,15 +35,17 @@ WTGeneratorAudioProcessor::WTGeneratorAudioProcessor()
         // channels; future stereo wavetables get true L/R separation.
         .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
     , apvts (*this, nullptr, "Parameters", createParameterLayout())
+    , signalGenerator (apvts)
 {
     // Cache the APVTS raw-value pointers once - the audio thread then reads
     // parameters without a string lookup.
     for (int i = 0; i < kMaxExpressionParameters; ++i)
         poolParamPtrs[(size_t) i] = apvts.getRawParameterValue (poolParamID (i));
 
-    outputGainPtr      = apvts.getRawParameterValue ("outputGain");
-    playbackTriggerPtr = apvts.getRawParameterValue ("playbackTrigger");
-    generatorModePtr   = apvts.getRawParameterValue ("generatorMode");
+    outputGainPtr       = apvts.getRawParameterValue ("outputGain");
+    playbackTriggerPtr  = apvts.getRawParameterValue ("playbackTrigger");
+    generatorModePtr    = apvts.getRawParameterValue ("generatorMode");
+    builtInGeneratorPtr = apvts.getRawParameterValue ("builtInGenerator");
 
     // Seed the pool slots from the baked-in default expression so a fresh
     // insert is audible immediately rather than running amp = 0.
@@ -104,9 +113,20 @@ bool WTGeneratorAudioProcessor::loadExpressionFileInternal (const juce::File& fi
 
 juce::String WTGeneratorAudioProcessor::getSignalSourceLabel() const
 {
-    // v1 is expression mode only - processBlock emits silence for other
-    // generatorMode values. v2 / v3 wrap this in a switch on generatorMode,
-    // adding a branch per mode (WTGENERATOR.md section 10.4).
+    const int mode = (generatorModePtr != nullptr) ? (int) generatorModePtr->load() : 0;
+
+    // Built-in mode (WTGENERATOR.md section 10.4). Wavetable / Render are v3.
+    if (mode == 1)
+    {
+        juce::String name;
+        if (auto* choice = dynamic_cast<juce::AudioParameterChoice*> (
+                               apvts.getParameter ("builtInGenerator")))
+            name = choice->getCurrentChoiceName();
+
+        return "Built-in generator - " + name;
+    }
+
+    // Expression mode.
     if (loadedFile == juce::File())
         return "Built-in expression - Sine";
 
@@ -155,6 +175,18 @@ WTGeneratorAudioProcessor::createParameterLayout()
         juce::StringArray { "Expression", "Built-in", "Wavetable", "Render" },
         0));
 
+    // Built-in generator selection. WTGENERATOR.md section 4.4. All 14
+    // values declared now; v2 implements the generators that read them.
+    // Meaningful only while Generator Mode is Built-in.
+    layout.add (std::make_unique<juce::AudioParameterChoice> (
+        juce::ParameterID { "builtInGenerator", 1 },
+        "Built-in Generator",
+        juce::StringArray { "Sine", "Sine Sweep", "Two-Tone", "Multisine",
+                            "Chirp", "Impulse", "Step", "Tone Burst",
+                            "White Noise", "Pink Noise", "Brown Noise",
+                            "MLS", "DC", "Silence" },
+        0));
+
     // Playback trigger. WTGENERATOR.md section 5.2. All three values are
     // declared now even though MIDI is non-functional until v5 - adding a
     // Choice value later would change the parameter and invalidate host
@@ -165,6 +197,21 @@ WTGeneratorAudioProcessor::createParameterLayout()
         juce::StringArray { "Transport", "MIDI", "Always" },
         0));
 
+    // Repeat mode. WTGENERATOR.md section 5.3 - how the signal repeats once
+    // playback is active. One-Shot fires once per playback start (impulse,
+    // step); Periodic re-fires every 1 / periodicRate seconds.
+    layout.add (std::make_unique<juce::AudioParameterChoice> (
+        juce::ParameterID { "oneShot", 1 },
+        "Repeat Mode",
+        juce::StringArray { "Loop", "One-Shot", "Periodic" },
+        0));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "periodicRate", 1 },
+        "Periodic Rate (Hz)",
+        juce::NormalisableRange<float> (0.1f, 100.0f, 0.0f, 0.30f),
+        1.0f));
+
     // Output gain. WTGENERATOR.md section 5.4. Linear-in-dB range; the
     // minimum doubles as -inf (SignalGenerator maps kOutputGainMinDb to a
     // linear gain of 0).
@@ -173,6 +220,127 @@ WTGeneratorAudioProcessor::createParameterLayout()
         "Output Gain",
         juce::NormalisableRange<float> (kOutputGainMinDb, kOutputGainMaxDb),
         0.0f));
+
+    // ---- Built-in generator parameters -------------------------------------
+    // WTGENERATOR.md section 4.4. Dedicated, named parameters per generator
+    // (section 6.1 - "parameters exposed as themselves"). Declared together
+    // here, grouped by generator; v2 wires the generators that read them.
+    // dB level parameters reuse the Output Gain range (kOutputGainMinDb as
+    // -inf). Sweep / Chirp / Multisine take their level from Output Gain and
+    // so declare none of their own.
+    const juce::NormalisableRange<float> dbRange { kOutputGainMinDb, kOutputGainMaxDb };
+
+    // Sine.
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "sineFreq", 1 }, "Sine Frequency (Hz)",
+        freqRange (20.0f, 20000.0f), 1000.0f));
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "sineLevel", 1 }, "Sine Level (dB)", dbRange, -6.0f));
+
+    // Sine sweep.
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "sweepStartHz", 1 }, "Sweep Start (Hz)",
+        freqRange (20.0f, 20000.0f), 20.0f));
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "sweepEndHz", 1 }, "Sweep End (Hz)",
+        freqRange (20.0f, 20000.0f), 20000.0f));
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "sweepDuration", 1 }, "Sweep Duration (s)",
+        juce::NormalisableRange<float> (0.1f, 60.0f), 10.0f));
+    layout.add (std::make_unique<juce::AudioParameterChoice> (
+        juce::ParameterID { "sweepCurve", 1 }, "Sweep Curve",
+        juce::StringArray { "Linear", "Logarithmic" }, 1));
+
+    // Two-tone.
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "twoToneF1", 1 }, "Two-Tone f1 (Hz)",
+        freqRange (20.0f, 20000.0f), 1000.0f));
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "twoToneF2", 1 }, "Two-Tone f2 (Hz)",
+        freqRange (20.0f, 20000.0f), 1100.0f));
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "twoToneLevel1", 1 }, "Two-Tone Level 1 (dB)", dbRange, -12.0f));
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "twoToneLevel2", 1 }, "Two-Tone Level 2 (dB)", dbRange, -12.0f));
+
+    // Multisine.
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "multisineFundamental", 1 }, "Multisine Fundamental (Hz)",
+        freqRange (10.0f, 2000.0f), 100.0f));
+    layout.add (std::make_unique<juce::AudioParameterInt> (
+        juce::ParameterID { "multisineMaxHarmonic", 1 }, "Multisine Max Harmonic",
+        1, 256, 32));
+    layout.add (std::make_unique<juce::AudioParameterChoice> (
+        juce::ParameterID { "multisinePhase", 1 }, "Multisine Phase",
+        juce::StringArray { "Zero", "Random", "Schroeder" }, 2));
+
+    // Chirp (Farina).
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "chirpStartHz", 1 }, "Chirp Start (Hz)",
+        freqRange (20.0f, 20000.0f), 20.0f));
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "chirpEndHz", 1 }, "Chirp End (Hz)",
+        freqRange (20.0f, 20000.0f), 20000.0f));
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "chirpDuration", 1 }, "Chirp Duration (s)",
+        juce::NormalisableRange<float> (0.1f, 60.0f), 5.0f));
+
+    // Impulse.
+    layout.add (std::make_unique<juce::AudioParameterChoice> (
+        juce::ParameterID { "impulsePolarity", 1 }, "Impulse Polarity",
+        juce::StringArray { "Positive", "Negative" }, 0));
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "impulseLevel", 1 }, "Impulse Level (dB)", dbRange, 0.0f));
+
+    // Step.
+    layout.add (std::make_unique<juce::AudioParameterInt> (
+        juce::ParameterID { "stepRiseTime", 1 }, "Step Rise Time (samples)",
+        0, 1024, 0));
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "stepLevel", 1 }, "Step Level (dB)", dbRange, -6.0f));
+
+    // Tone burst.
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "burstFreq", 1 }, "Burst Frequency (Hz)",
+        freqRange (20.0f, 20000.0f), 1000.0f));
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "burstLevel", 1 }, "Burst Level (dB)", dbRange, -6.0f));
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "burstAttack", 1 }, "Burst Attack (ms)",
+        juce::NormalisableRange<float> (0.0f, 1000.0f), 5.0f));
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "burstDecay", 1 }, "Burst Decay (ms)",
+        juce::NormalisableRange<float> (0.0f, 1000.0f), 50.0f));
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "burstSustain", 1 }, "Burst Sustain (dB)",
+        juce::NormalisableRange<float> (kOutputGainMinDb, 0.0f), -6.0f));
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "burstRelease", 1 }, "Burst Release (ms)",
+        juce::NormalisableRange<float> (0.0f, 1000.0f), 50.0f));
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "burstGate", 1 }, "Burst Gate (ms)",
+        juce::NormalisableRange<float> (1.0f, 10000.0f), 200.0f));
+
+    // White / pink / brown noise.
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "whiteNoiseLevel", 1 }, "White Noise Level (dB)", dbRange, -12.0f));
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "pinkNoiseLevel", 1 }, "Pink Noise Level (dB)", dbRange, -12.0f));
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "brownNoiseLevel", 1 }, "Brown Noise Level (dB)", dbRange, -12.0f));
+
+    // MLS.
+    layout.add (std::make_unique<juce::AudioParameterInt> (
+        juce::ParameterID { "mlsOrder", 1 }, "MLS Order", 2, 20, 16));
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "mlsLevel", 1 }, "MLS Level (dB)", dbRange, -12.0f));
+
+    // DC offset.
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "dcLevel", 1 }, "DC Offset",
+        juce::NormalisableRange<float> (-1.0f, 1.0f), 0.0f));
+
+    // Silence has no parameters.
 
     // ---- Expression parameter pool (always last) ---------------------------
     // 32 generic 0..1 float slots. Declared once and never changed: the host
@@ -282,12 +450,14 @@ void WTGeneratorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         poolValues[(size_t) i] = poolParamPtrs[(size_t) i]->load();
 
     // ---- Render ------------------------------------------------------------
-    // v1 implements only Expression mode; other generatorMode selections emit
-    // silence rather than a wrong signal (PRINCIPLES.md section 1).
-    const bool expressionMode = ((int) generatorModePtr->load()) == 0;
+    // SignalGenerator dispatches on generatorMode. Expression mode is live;
+    // the Built-in generators fill in across v2; Wavetable / Render in v3.
+    const int generatorMode    = (int) generatorModePtr->load();
+    const int builtInGenerator = (int) builtInGeneratorPtr->load();
 
     auto* mono = buffer.getWritePointer (0);
-    signalGenerator.process (mono, numSamples, playing && expressionMode, startTime,
+    signalGenerator.process (mono, numSamples, playing, startTime,
+                             generatorMode, builtInGenerator,
                              poolValues, kMaxExpressionParameters);
 
     // ---- Output gain -------------------------------------------------------

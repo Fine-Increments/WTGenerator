@@ -27,12 +27,13 @@
 #include <memory>
 #include "ExpressionEngine.h"
 #include "ExpressionDefinition.h"
+#include "../BuiltIn/BuiltInGenerator.h"
 
 //==============================================================================
 class SignalGenerator
 {
 public:
-    SignalGenerator();
+    explicit SignalGenerator (juce::AudioProcessorValueTreeState& apvts);
 
     // Message thread. Sets the sample rate, sizes the oversampler for
     // `maxBlockSize`, and recompiles the active definition. Call from
@@ -44,12 +45,15 @@ public:
     // currently running engine is left untouched and getLastError() says why.
     bool loadDefinition (const ExpressionDefinition& definition);
 
-    // Audio thread. Renders `numSamples` of mono signal into `out`. Writes
-    // silence when `playing` is false or no expression is compiled.
-    // `startTime` is the elapsed playback time (seconds) of out[0].
-    // `poolValues` points at `numPoolValues` pool-slot values (0..1); the
-    // active engine's declared parameters are fed from the matching slots.
+    // Audio thread. Renders `numSamples` of mono signal into `out`, choosing
+    // the signal source from `generatorMode` (0 = Expression, 1 = Built-in;
+    // Wavetable / Render arrive in v3 - silent for now). In Built-in mode
+    // `builtInGenerator` selects the generator. Writes silence when
+    // `playing` is false. `startTime` is the elapsed playback time (seconds)
+    // of out[0]. `poolValues` points at `numPoolValues` pool-slot values
+    // (0..1), used by expression mode.
     void process (float* out, int numSamples, bool playing, double startTime,
+                  int generatorMode, int builtInGenerator,
                   const float* poolValues, int numPoolValues) noexcept;
 
     // Latency (base-rate samples) the oversampling anti-aliasing filter
@@ -64,6 +68,18 @@ public:
 private:
     // Compiles `def` into a fresh engine and, on success, publishes it.
     bool installEngine (const ExpressionDefinition& def);
+
+    // Audio thread. Renders `numSamples` into `out` from the expression
+    // engine - the generatorMode == Expression path. Oversampled internally
+    // for anti-aliasing.
+    void renderExpression (float* out, int numSamples, double startTime,
+                           const float* poolValues, int numPoolValues) noexcept;
+
+    // Audio thread. Renders `numSamples` into `out` from the built-in
+    // generator selected by `generatorIndex` - the generatorMode == Built-in
+    // path. Built-in generators run at the session rate, no oversampler.
+    void renderBuiltIn (float* out, int numSamples, double startTime,
+                        int generatorIndex) noexcept;
 
     // 2 ^ 3 = 8x oversampling. WTGENERATOR.md section 7.4 - the factor is an
     // internal constant; the expression is evaluated at this multiple of the
@@ -88,16 +104,31 @@ private:
     double       sampleRate = 48000.0;
     juce::String lastError;
 
-    // Parameter smoothing state (audio thread only). paramPrev holds each
-    // parameter's value at the end of the previous block; a block linear-
-    // interpolates from it toward the host's current value, so an automated
-    // parameter reads as a smooth ramp rather than a once-per-block
-    // staircase. lastEngine / wasPlaying detect an engine swap or a playback
-    // restart, where the parameters are primed to the host values instead of
-    // ramping from a stale baseline.
+    // Expression-path parameter smoothing state (audio thread only).
+    // paramPrev holds each parameter's value at the end of the previous
+    // block; a block linear-interpolates from it toward the host's current
+    // value, so an automated parameter reads as a smooth ramp rather than a
+    // once-per-block staircase. lastEngine / expressionActive detect an
+    // engine swap, a playback restart, or a switch back from another
+    // generator mode - any of which primes the parameters to the host
+    // values rather than ramping from a stale baseline.
     std::array<float, kMaxExpressionParameters> paramPrev {};
-    ExpressionEngine* lastEngine = nullptr;
-    bool              wasPlaying = false;
+    ExpressionEngine* lastEngine       = nullptr;
+    bool              expressionActive = false;
+
+    // Built-in generators (WTGENERATOR.md section 4.4). One slot per
+    // builtInGenerator Choice value; renderBuiltIn() dispatches to the
+    // selected one. Slots are filled across v2 steps 3-6; an empty slot
+    // renders silence.
+    static constexpr int kNumBuiltInGenerators = 14;
+    std::array<std::unique_ptr<BuiltInGenerator>, kNumBuiltInGenerators> builtInGenerators;
+
+    // Built-in path reset tracking (audio thread only) - mirrors the
+    // expression path: a fresh start, a generator change, or a transport
+    // rewind resets the active generator's phase.
+    bool   builtInActive        = false;
+    int    lastBuiltInGenerator = -1;
+    double lastBuiltInStartTime = 0.0;
 
     // Linear-phase half-band FIR oversampler. Linear phase keeps the test
     // signal's phase relationships intact - it matters for a measurement

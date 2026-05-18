@@ -55,6 +55,29 @@ WTGeneratorAudioProcessorEditor::WTGeneratorAudioProcessorEditor (WTGeneratorAud
     gainAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
         audioProcessor.apvts, "outputGain", gainSlider);
 
+    // Generator-mode selector. Item IDs 1..N match the Choice value order.
+    generatorModeBox.addItem ("Expression", 1);
+    generatorModeBox.addItem ("Built-in",   2);
+    generatorModeBox.addItem ("Wavetable",  3);
+    generatorModeBox.addItem ("Render",     4);
+    addAndMakeVisible (generatorModeBox);
+    generatorModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
+        audioProcessor.apvts, "generatorMode", generatorModeBox);
+
+    // Built-in generator selector - the 14 generators in builtInGenerator
+    // Choice order.
+    const char* const generatorNames[] =
+        { "Sine", "Sine Sweep", "Two-Tone", "Multisine", "Chirp", "Impulse",
+          "Step", "Tone Burst", "White Noise", "Pink Noise", "Brown Noise",
+          "MLS", "DC", "Silence" };
+    for (int i = 0; i < (int) juce::numElementsInArray (generatorNames); ++i)
+        builtInGeneratorBox.addItem (generatorNames[i], i + 1);
+    addAndMakeVisible (builtInGeneratorBox);
+    builtInGeneratorAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
+        audioProcessor.apvts, "builtInGenerator", builtInGeneratorBox);
+
+    generatorModeParam = audioProcessor.apvts.getRawParameterValue ("generatorMode");
+
     audioProcessor.addChangeListener (this);
 
     setResizable (true, true);
@@ -63,10 +86,13 @@ WTGeneratorAudioProcessorEditor::WTGeneratorAudioProcessorEditor (WTGeneratorAud
     setSize (kBaseWidth, kBaseHeight);
 
     refreshFromProcessor();
+    updateModeVisibility();
+    startTimerHz (15);
 }
 
 WTGeneratorAudioProcessorEditor::~WTGeneratorAudioProcessorEditor()
 {
+    stopTimer();
     audioProcessor.removeChangeListener (this);
     setLookAndFeel (nullptr);
 }
@@ -77,6 +103,36 @@ void WTGeneratorAudioProcessorEditor::changeListenerCallback (juce::ChangeBroadc
     // The processor broadcasts whenever the active definition or the load
     // status changes (a user load, or a session restore).
     refreshFromProcessor();
+}
+
+void WTGeneratorAudioProcessorEditor::timerCallback()
+{
+    // Follow generatorMode changes from any source - the selector, host
+    // automation, a preset load - and swap the mode-specific UI.
+    const int mode = (generatorModeParam != nullptr)
+                        ? (int) generatorModeParam->load() : 0;
+    if (mode != lastGeneratorMode)
+        updateModeVisibility();
+}
+
+void WTGeneratorAudioProcessorEditor::updateModeVisibility()
+{
+    const int mode = (generatorModeParam != nullptr)
+                        ? (int) generatorModeParam->load() : 0;
+    lastGeneratorMode = mode;
+
+    const bool expression = (mode == 0);
+    const bool builtIn    = (mode == 1);
+
+    // Expression-mode controls.
+    loadButton.setVisible    (expression);
+    fileLabel.setVisible     (expression);
+    statusLabel.setVisible   (expression);
+    paramViewport.setVisible (expression);
+
+    // Built-in-mode controls. The per-generator parameter panel arrives in
+    // the next sub-step; Built-in mode currently shows just the selector.
+    builtInGeneratorBox.setVisible (builtIn);
 }
 
 void WTGeneratorAudioProcessorEditor::refreshFromProcessor()
@@ -127,8 +183,17 @@ void WTGeneratorAudioProcessorEditor::resized()
 
     auto area = getLocalBounds().reduced (sx (12));
 
+    // Header: product name (painted) + Generator Mode selector.
     auto header = area.removeFromTop (sx (28));
-    loadButton.setBounds (header.removeFromRight (sx (150)));
+    generatorModeBox.setBounds (header.removeFromRight (sx (150)));
+
+    area.removeFromTop (sx (8));
+
+    // Mode-specific action row: Load Expression... (Expression mode) or the
+    // Built-in Generator selector (Built-in mode) - one slot, one visible.
+    auto actionRect = area.removeFromTop (sx (26)).removeFromLeft (sx (180));
+    loadButton.setBounds          (actionRect);
+    builtInGeneratorBox.setBounds (actionRect);
 
     area.removeFromTop (sx (8));
     fileLabel.setBounds (area.removeFromTop (sx (20)));

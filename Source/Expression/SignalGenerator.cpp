@@ -9,13 +9,19 @@
 
 #include "SignalGenerator.h"
 #include "DefaultExpression.h"
+#include "../BuiltIn/SineGenerator.h"
 
 //==============================================================================
-SignalGenerator::SignalGenerator()
+SignalGenerator::SignalGenerator (juce::AudioProcessorValueTreeState& apvts)
 {
-    // The plugin emits this until the user loads an .xml of their own. It is
-    // compiled into an engine by the first prepare() call.
+    // Expression mode emits this until the user loads an .xml of their own;
+    // it is compiled into an engine by the first prepare() call.
     definition = getDefaultExpression();
+
+    // Built-in generators (WTGENERATOR.md section 4.4). Each caches its own
+    // APVTS parameter pointers. Slots 1-13 are filled in over v2 steps
+    // 3b-6; an unfilled slot renders silence.
+    builtInGenerators[0] = std::make_unique<SineGenerator> (apvts);
 }
 
 void SignalGenerator::prepare (double newSampleRate, int maxBlockSize)
@@ -27,6 +33,12 @@ void SignalGenerator::prepare (double newSampleRate, int maxBlockSize)
     // Recompile the active definition at the new rate. prepareToPlay is not
     // concurrent with processBlock, so the atomic swap here is uncontended.
     installEngine (definition);
+
+    // The built-in generators render straight at the session rate - each is
+    // band-limited by construction, so they bypass the oversampler entirely.
+    for (auto& generator : builtInGenerators)
+        if (generator != nullptr)
+            generator->prepare (sampleRate);
 }
 
 bool SignalGenerator::loadDefinition (const ExpressionDefinition& newDefinition)
@@ -67,34 +79,68 @@ int SignalGenerator::getLatencySamples() const noexcept
 
 //==============================================================================
 void SignalGenerator::process (float* out, int numSamples, bool playing,
-                               double startTime,
+                               double startTime, int generatorMode, int builtInGenerator,
                                const float* poolValues, int numPoolValues) noexcept
+{
+    // Expression mode oversamples - it evaluates arbitrary math and cannot
+    // know whether the user wrote a discontinuity-rich waveform. The built-in
+    // generators are purpose-written and band-limited by construction, so
+    // they render straight at the session rate. Each path owns its own rate
+    // handling and writes `out` directly; the two ...Active flags let a mode
+    // switch (or a stop) re-prime / re-reset the path resumed into.
+    constexpr int kExpression = 0;
+    constexpr int kBuiltIn    = 1;
+
+    if (playing && generatorMode == kExpression)
+    {
+        builtInActive = false;
+        renderExpression (out, numSamples, startTime, poolValues, numPoolValues);
+    }
+    else if (playing && generatorMode == kBuiltIn)
+    {
+        expressionActive = false;
+        renderBuiltIn (out, numSamples, startTime, builtInGenerator);
+    }
+    else
+    {
+        juce::FloatVectorOperations::clear (out, numSamples);
+        expressionActive = false;
+        builtInActive    = false;
+    }
+}
+
+void SignalGenerator::renderExpression (float* out, int numSamples, double startTime,
+                                        const float* poolValues, int numPoolValues) noexcept
 {
     auto* engine = activeEngine.load (std::memory_order_acquire);
 
-    // No engine published yet -> hard silence, and skip the oversampler so
-    // its filter state stays clean for the first valid definition.
-    if (engine == nullptr || ! engine->isCompiled())
+    // No engine published yet -> silence (and skip the oversampler).
+    if (engine == nullptr || ! engine->isCompiled() || numSamples <= 0)
     {
-        juce::FloatVectorOperations::clear (out, numSamples);
-        lastEngine = engine;
-        wasPlaying = false;
+        juce::FloatVectorOperations::clear (out, juce::jmax (0, numSamples));
+        lastEngine       = engine;
+        expressionActive = false;
         return;
     }
 
-    // A changed engine pointer (a definition load) or a playback restart
-    // breaks the parameter history: prime paramPrev to the host values
-    // below rather than ramping the parameters from a stale baseline.
-    const bool primeParams = (engine != lastEngine) || ! wasPlaying;
-    lastEngine = engine;
+    // A changed engine pointer (a definition load), or the expression path
+    // not having rendered the previous block (playback restart, or a switch
+    // back from another generator mode), breaks the parameter history -
+    // prime paramPrev to the host values rather than ramping from a stale
+    // baseline.
+    const bool primeParams = (engine != lastEngine) || ! expressionActive;
 
-    // Generate at the oversampled rate, then decimate. processSamplesUp
-    // returns an AudioBlock over the oversampler's internal buffer; its
-    // upsampled contents are irrelevant here - we overwrite them with the
-    // expression evaluated at the oversampled rate - and processSamplesDown
-    // reads that same buffer back down, applying the anti-imaging FIR.
-    // Running it every block (silence included) keeps the FIR state
-    // continuous, so transport start / stop has no filter transient.
+    // The oversampler's FIR was not fed while another mode (or silence) was
+    // active - reset it so the resumed expression carries no stale state.
+    if (! expressionActive)
+        oversampling.reset();
+
+    lastEngine       = engine;
+    expressionActive = true;
+
+    // Oversample up, evaluate the expression into the oversampled buffer,
+    // then decimate back down. The expression engine evaluates arbitrary
+    // math, so its output is band-limited by oversampling (section 7.4).
     float* channelPtrs[1] = { out };
     juce::dsp::AudioBlock<float> ioBlock (channelPtrs, 1, (size_t) numSamples);
 
@@ -102,13 +148,10 @@ void SignalGenerator::process (float* out, int numSamples, bool playing,
     float*    os           = osBlock.getChannelPointer (0);
     const int osNumSamples = (int) osBlock.getNumSamples();
 
-    if (playing && osNumSamples > 0)
+    if (osNumSamples > 0)
     {
         const int numParams = juce::jmin (engine->getNumParameters(), numPoolValues);
 
-        // Prime the smoother baseline on the first block of a new engine or
-        // a fresh playback start - that block holds steady at the host
-        // values instead of ramping.
         if (primeParams)
             for (int i = 0; i < numParams; ++i)
                 paramPrev[(size_t) i] = poolValues[i];
@@ -120,8 +163,7 @@ void SignalGenerator::process (float* out, int numSamples, bool playing,
         // Linear-interpolate each declared parameter from its previous-block
         // value toward the host's current value across the block, so
         // automation reads as a smooth ramp rather than a once-per-block
-        // staircase. The parameters reach the host value at the block's last
-        // sample. invOsRate doubles as the per-sample time step the engine
+        // staircase. invOsRate doubles as the per-sample time step the engine
         // integrates phasors against.
         for (int j = 0; j < osNumSamples; ++j)
         {
@@ -140,11 +182,38 @@ void SignalGenerator::process (float* out, int numSamples, bool playing,
         for (int i = 0; i < numParams; ++i)
             paramPrev[(size_t) i] = poolValues[i];
     }
-    else
+
+    oversampling.processSamplesDown (ioBlock);
+}
+
+void SignalGenerator::renderBuiltIn (float* out, int numSamples, double startTime,
+                                     int generatorIndex) noexcept
+{
+    BuiltInGenerator* generator =
+        (generatorIndex >= 0 && generatorIndex < (int) builtInGenerators.size())
+            ? builtInGenerators[(size_t) generatorIndex].get()
+            : nullptr;
+
+    // An unimplemented generator slot (or an out-of-range index) is silence.
+    if (generator == nullptr || numSamples <= 0)
     {
-        juce::FloatVectorOperations::clear (os, osNumSamples);
+        juce::FloatVectorOperations::clear (out, juce::jmax (0, numSamples));
+        builtInActive = false;
+        return;
     }
 
-    wasPlaying = playing;
-    oversampling.processSamplesDown (ioBlock);
+    // Reset the generator on a fresh start - the first built-in block, a
+    // generator change, or a transport rewind (startTime jumped backwards).
+    const bool freshStart = ! builtInActive
+                         || generatorIndex != lastBuiltInGenerator
+                         || startTime < lastBuiltInStartTime;
+    if (freshStart)
+        generator->reset();
+
+    builtInActive        = true;
+    lastBuiltInGenerator = generatorIndex;
+    lastBuiltInStartTime = startTime;
+
+    // Built-in generators render straight at the session rate - no oversampler.
+    generator->render (out, numSamples, startTime);
 }

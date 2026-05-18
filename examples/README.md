@@ -8,10 +8,11 @@ button; its declared parameters appear as sliders in the plugin window and as
 | File | Signal | Notes |
 |---|---|---|
 | `square.xml`   | Band-limited square wave        | Exercises the 8x anti-aliasing |
-| `saw.xml`      | Sawtooth (fractional-part)      | Also discontinuity-rich |
+| `saw.xml`      | Sawtooth                        | Also discontinuity-rich |
 | `pwm.xml`      | Pulse wave, adjustable duty     | Automate `duty` for PWM |
 | `fm.xml`       | FM oscillator                   | Automate `mod_index` / `mod_hz` at audio rate |
-| `am_noise.xml` | Amplitude-modulated white noise | Shows the `noise()` function |
+| `noise.xml`    | Plain white noise               | The `noise(seed)` function on its own |
+| `am_noise.xml` | Amplitude-modulated white noise | LFO-gated noise, via a phasor |
 | `chirp.xml`    | Linear chirp                    | Aperiodic; best driven by the transport |
 
 ## Writing your own

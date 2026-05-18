@@ -146,9 +146,10 @@ private:
     // audio thread never does a parameter-name string lookup. The pool
     // pointers feed the expression's declared parameters in slot order.
     std::array<std::atomic<float>*, kMaxExpressionParameters> poolParamPtrs {};
-    std::atomic<float>* outputGainPtr      = nullptr;
-    std::atomic<float>* playbackTriggerPtr = nullptr;
-    std::atomic<float>* generatorModePtr   = nullptr;
+    std::atomic<float>* outputGainPtr       = nullptr;
+    std::atomic<float>* playbackTriggerPtr  = nullptr;
+    std::atomic<float>* generatorModePtr    = nullptr;
+    std::atomic<float>* builtInGeneratorPtr = nullptr;
 
     // Free-running sample counter for the playback time base when the host
     // reports no transport time (the Standalone build - WTGENERATOR.md

@@ -10,6 +10,7 @@
 #include "PluginEditor.h"
 #include "Colors.h"
 #include "BuiltIn/PresetLibrary.h"
+#include <vector>
 
 //==============================================================================
 WTGeneratorAudioProcessorEditor::WTGeneratorAudioProcessorEditor (WTGeneratorAudioProcessor& p)
@@ -179,6 +180,7 @@ void WTGeneratorAudioProcessorEditor::timerCallback()
     {
         lastBuiltInGenerator = generator;
         builtInPanel.setGenerator (generator);
+        updatePlaybackControlVisibility();   // Repeat Mode / Periodic Rate
         resized();
     }
 
@@ -221,7 +223,40 @@ void WTGeneratorAudioProcessorEditor::updateModeVisibility()
         builtInPanel.setGenerator (generator);
     }
 
+    updatePlaybackControlVisibility();
     resized();
+}
+
+bool WTGeneratorAudioProcessorEditor::repeatModeApplies() const
+{
+    // Built-in mode only - Expression mode ignores Repeat Mode entirely.
+    if (generatorModeParam == nullptr || (int) generatorModeParam->load() != 1)
+        return false;
+
+    // Sine Sweep (1), Chirp (4), Impulse (5), Step (6) and Tone Burst (7)
+    // are the generators that read the Repeat Mode parameter.
+    const int g = (builtInGeneratorParam != nullptr) ? (int) builtInGeneratorParam->load() : 0;
+    return g == 1 || g == 4 || g == 5 || g == 6 || g == 7;
+}
+
+bool WTGeneratorAudioProcessorEditor::periodicRateApplies() const
+{
+    if (generatorModeParam == nullptr || (int) generatorModeParam->load() != 1)
+        return false;
+
+    // Only Impulse (5), Step (6) and Tone Burst (7) read Periodic Rate.
+    const int g = (builtInGeneratorParam != nullptr) ? (int) builtInGeneratorParam->load() : 0;
+    return g == 5 || g == 6 || g == 7;
+}
+
+void WTGeneratorAudioProcessorEditor::updatePlaybackControlVisibility()
+{
+    const bool repeat   = repeatModeApplies();
+    const bool periodic = periodicRateApplies();
+    repeatLabel.setVisible        (repeat);
+    repeatBox.setVisible          (repeat);
+    periodicRateLabel.setVisible  (periodic);
+    periodicRateSlider.setVisible (periodic);
 }
 
 void WTGeneratorAudioProcessorEditor::refreshFromProcessor()
@@ -307,30 +342,41 @@ void WTGeneratorAudioProcessorEditor::resized()
     area.removeFromTop (sx (4));
     statusLabel.setBounds (area.removeFromTop (sx (34)));
 
-    auto bottom = area.removeFromBottom (sx (100));
+    // Playback strip. Trigger and Output Gain always apply; Repeat Mode and
+    // Periodic Rate join only for the generators that read them. Whichever
+    // apply are laid out two per row, and the strip is sized to suit - so a
+    // steady generator gives that height back to the parameter list.
+    struct PbControl { juce::Component* label; juce::Component* ctl; };
+    std::vector<PbControl> pb;
+    pb.push_back ({ &triggerLabel, &triggerBox });
+    if (repeatModeApplies())   pb.push_back ({ &repeatLabel, &repeatBox });
+    if (periodicRateApplies()) pb.push_back ({ &periodicRateLabel, &periodicRateSlider });
+    pb.push_back ({ &gainLabel, &gainSlider });
+
+    const int pbRows = ((int) pb.size() + 1) / 2;
+    auto      bottom = area.removeFromBottom (sx (50) * pbRows);
+
+    for (int r = 0; r < pbRows; ++r)
     {
-        // Row 1: Playback Trigger | Repeat Mode.
-        auto row1 = bottom.removeFromTop (sx (50));
-        auto tl   = row1.removeFromLeft (row1.getWidth() / 2).reduced (sx (4), 0);
-        triggerLabel.setBounds (tl.removeFromTop (sx (20)));
-        triggerBox.setBounds   (tl.removeFromTop (sx (24)));
+        auto rowRect = bottom.removeFromTop (sx (50));
+        juce::Rectangle<int> cells[2];
+        cells[0] = rowRect.removeFromLeft (rowRect.getWidth() / 2);
+        cells[1] = rowRect;
 
-        auto tr = row1.reduced (sx (4), 0);
-        repeatLabel.setBounds (tr.removeFromTop (sx (20)));
-        repeatBox.setBounds   (tr.removeFromTop (sx (24)));
+        for (int c = 0; c < 2; ++c)
+        {
+            const int idx = r * 2 + c;
+            if (idx >= (int) pb.size())
+                break;
 
-        // Row 2: Periodic Rate | Output Gain.
-        auto row2 = bottom;
-        auto bl   = row2.removeFromLeft (row2.getWidth() / 2).reduced (sx (4), 0);
-        periodicRateLabel.setBounds  (bl.removeFromTop (sx (20)));
-        periodicRateSlider.setBounds (bl.removeFromTop (sx (24)));
-        periodicRateSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, sx (56), sx (18));
-
-        auto br = row2.reduced (sx (4), 0);
-        gainLabel.setBounds  (br.removeFromTop (sx (20)));
-        gainSlider.setBounds (br.removeFromTop (sx (24)));
-        gainSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, sx (56), sx (18));
+            auto cell = cells[c].reduced (sx (4), 0);
+            pb[(size_t) idx].label->setBounds (cell.removeFromTop (sx (20)));
+            pb[(size_t) idx].ctl  ->setBounds (cell.removeFromTop (sx (24)));
+        }
     }
+
+    gainSlider.setTextBoxStyle         (juce::Slider::TextBoxRight, false, sx (56), sx (18));
+    periodicRateSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, sx (56), sx (18));
 
     area.removeFromTop    (sx (8));
     area.removeFromBottom (sx (8));

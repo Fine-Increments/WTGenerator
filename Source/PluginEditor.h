@@ -90,6 +90,15 @@ private:
     // the same preset can be picked again.
     void applySelectedPreset();
 
+    // Repeat Mode applies to the swept and triggered generators; Periodic
+    // Rate only to the triggered ones. Both are hidden for generators - and
+    // for Expression mode - that ignore them. updatePlaybackControlVisibility
+    // pushes that to the controls; the playback strip in resized() reflows
+    // around whichever remain.
+    bool repeatModeApplies() const;
+    bool periodicRateApplies() const;
+    void updatePlaybackControlVisibility();
+
     float scale() const noexcept
     {
         return juce::jmin ((float) getWidth()  / (float) kBaseWidth,
@@ -136,9 +145,11 @@ private:
     juce::Viewport        builtInViewport;
     BuiltInParameterPanel builtInPanel;
 
-    // Playback controls. Repeat Mode and Periodic Rate are global, like
-    // Playback Trigger - shown in both generator modes. Periodic Rate is
-    // greyed out unless Repeat Mode is Periodic, the only mode it affects.
+    // Playback controls. Playback Trigger and Output Gain always apply.
+    // Repeat Mode shows only for the swept / triggered generators, Periodic
+    // Rate only for the triggered ones (see repeatModeApplies /
+    // periodicRateApplies); Periodic Rate is additionally greyed out unless
+    // Repeat Mode is Periodic, the only mode it affects.
     juce::Label    triggerLabel { {}, "Playback Trigger" };
     juce::ComboBox triggerBox;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> triggerAttachment;

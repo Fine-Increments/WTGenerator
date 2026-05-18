@@ -27,7 +27,9 @@ namespace
         return (float) juce::Decibels::decibelsToGain (db, -100.0f);
     }
 
-    // Maximal-length LFSR feedback masks (XAPP052 taps), indexed by order.
+    // Galois LFSR toggle masks - the XAPP052 maximal-length polynomials in
+    // right-shifting Galois form, indexed by order. When the chip shifted
+    // out is 1, the register is XORed with this mask.
     const std::uint32_t kMlsTaps[21] =
     {
         0u, 0u,
@@ -35,12 +37,6 @@ namespace
         0x829u, 0x100Du, 0x2015u, 0x6000u, 0xD008u, 0x12000u, 0x20400u,
         0x40023u, 0x90000u
     };
-
-    inline std::uint32_t parity (std::uint32_t v) noexcept
-    {
-        v ^= v >> 16; v ^= v >> 8; v ^= v >> 4; v ^= v >> 2; v ^= v >> 1;
-        return v & 1u;
-    }
 }
 
 //==============================================================================
@@ -178,22 +174,22 @@ void MlsGenerator::render (float* out, int numSamples, double) noexcept
 
     const int order = juce::jlimit (2, 20,
         (orderParam != nullptr) ? (int) orderParam->load() : 16);
-    const std::uint32_t mask    = kMlsTaps[order];
-    const std::uint32_t topBit  = 1u << (order - 1);
-    const std::uint32_t fullMask = (1u << order) - 1u;
+    const std::uint32_t mask = kMlsTaps[order];
 
     gainRamp.setTarget (gainFor (levelParam, -12.0f));
     const double invN = 1.0 / (double) numSamples;
 
     for (int j = 0; j < numSamples; ++j)
     {
-        // Fibonacci LFSR: the chip shifted out is the sample (0 -> -1,
-        // 1 -> +1); the feedback bit is the parity of the tapped bits.
+        // Galois LFSR: the bit shifted out is the chip (0 -> -1, 1 -> +1);
+        // when it is 1, the tap mask is XORed back in. With the XAPP052
+        // Galois masks a non-zero register cycles through all 2^order - 1
+        // states - a true maximum-length sequence - and never collapses to
+        // zero, so no all-zero guard is needed.
         const std::uint32_t chip = lfsr & 1u;
-        const std::uint32_t fb   = parity (lfsr & mask);
-        lfsr = ((lfsr >> 1) | (fb ? topBit : 0u)) & fullMask;
-        if (lfsr == 0u)
-            lfsr = 1u;   // never let the register collapse to all-zero
+        lfsr >>= 1;
+        if (chip != 0u)
+            lfsr ^= mask;
 
         const double s = (chip != 0u) ? 1.0 : -1.0;
         out[j] = (float) (s * (double) gainRamp.at ((double) (j + 1) * invN));

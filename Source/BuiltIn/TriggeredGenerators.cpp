@@ -84,15 +84,23 @@ void StepGenerator::render (float* out, int numSamples, double) noexcept
 
     const double level = juce::Decibels::decibelsToGain (
                              (levelParam != nullptr) ? levelParam->load() : -6.0f, -100.0f);
-    const int    rise  = juce::jmax (0, (riseTimeParam != nullptr)
-                                            ? (int) riseTimeParam->load() : 0);
+    const double riseMs = juce::jmax (0.0, (riseTimeParam != nullptr)
+                                               ? (double) riseTimeParam->load() : 0.0);
     const bool   oneShot = (oneShotParam != nullptr) && ((int) oneShotParam->load() == kOneShot);
     const juce::int64 period = repeatPeriod (periodicParam, sampleRate);
     const juce::int64 halfPeriod = juce::jmax ((juce::int64) 1, period / 2);
 
+    // Rise Time is in milliseconds, so the edge is the same length at any
+    // session rate. In Loop / Periodic mode an edge longer than the half-
+    // period would never reach the rails - the square would sag into a low
+    // triangle - so clamp it to complete within the half-period.
+    double rise = riseMs * sampleRate / 1000.0;
+    if (! oneShot)
+        rise = juce::jmin (rise, (double) halfPeriod);
+
     // Per-sample slew so the edge takes `rise` samples; rise 0 is an instant
     // step.
-    const double slew = (rise > 0) ? level / (double) rise : level;
+    const double slew = (rise > 0.0) ? level / rise : level;
 
     for (int j = 0; j < numSamples; ++j)
     {
@@ -103,7 +111,7 @@ void StepGenerator::render (float* out, int numSamples, double) noexcept
             target = high ? level : 0.0;
         }
 
-        if (rise <= 0)
+        if (rise <= 0.0)
             currentValue = target;
         else if (currentValue < target)
             currentValue = juce::jmin (target, currentValue + slew);

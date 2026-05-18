@@ -296,10 +296,12 @@ WTGeneratorAudioProcessor::createParameterLayout()
     layout.add (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "impulseLevel", 1 }, "Impulse Level (dB)", dbRange, 0.0f));
 
-    // Step.
-    layout.add (std::make_unique<juce::AudioParameterInt> (
-        juce::ParameterID { "stepRiseTime", 1 }, "Step Rise Time (samples)",
-        0, 1024, 0));
+    // Step. Rise Time is in milliseconds so the edge is the same length at
+    // any session rate; render() converts it to samples. 0 ms is an instant
+    // step.
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "stepRiseTime", 1 }, "Step Rise Time (ms)",
+        juce::NormalisableRange<float> (0.0f, 100.0f), 0.0f));
     layout.add (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "stepLevel", 1 }, "Step Level (dB)", dbRange, -6.0f));
 

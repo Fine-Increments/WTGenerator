@@ -38,8 +38,9 @@ private:
 };
 
 //==============================================================================
-// A step: output rises 0 -> level over `riseTime` samples. One-Shot rises
-// once and holds; Loop / Periodic alternate up / down every half period.
+// A step: output rises 0 -> level over the Rise Time (milliseconds). One-Shot
+// rises once and holds; Loop / Periodic alternate up / down every half period,
+// with the rise clamped so the edge always completes within a half-period.
 class StepGenerator  : public BuiltInGenerator
 {
 public:
@@ -50,7 +51,7 @@ public:
     void render (float* out, int numSamples, double startTime) noexcept override;
 
 private:
-    std::atomic<float>* riseTimeParam = nullptr;   // samples
+    std::atomic<float>* riseTimeParam = nullptr;   // ms
     std::atomic<float>* levelParam    = nullptr;   // dB
     std::atomic<float>* oneShotParam  = nullptr;
     std::atomic<float>* periodicParam = nullptr;

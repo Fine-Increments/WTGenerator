@@ -16,21 +16,28 @@ envelope, no polyphony. Its job is a clean reference signal and nothing else.
 
 ## Status
 
-Pre-alpha. **v1 - expression mode** is working: the plugin generates a live
-test signal from a math expression, with every declared parameter exposed to
-the host for automation.
+Pre-alpha. **v1 (expression mode)** and **v2 (built-in generators + preset
+library)** are working: the plugin generates a live test signal either from a
+math expression or from one of 14 curated native generators, with every
+declared parameter exposed to the host for automation.
 
 What works today:
 
 - **Expression mode** - a test signal defined as a closed-form math
   expression in a small `.xml` file, evaluated live in C++. No Python, no
   rendering.
+- **Built-in generators** - 14 native C++ signals: sine, sine sweep,
+  two-tone, multisine, Farina chirp, impulse, step, tone burst, white / pink
+  / brown noise, MLS, DC, and silence. No setup, sample-accurate.
+- **Preset library** - one-click named setups for the common tests (log sine
+  sweep, 1 kHz reference tone, noise bursts, impulse trains, and more).
 - **Phasors** - declared oscillator phases the engine integrates, so an
   oscillator's frequency can be automated without clicks.
 - **Automatable parameters** - each declared parameter maps to a host
   automation slot; sweep it from the DAW at audio rate.
-- **Oversampled anti-aliasing** - the signal is evaluated at 8x and
-  decimated, so discontinuity-rich waveforms (square, saw) stay band-limited.
+- **Oversampled anti-aliasing** - expression output is evaluated oversampled
+  and decimated, so discontinuity-rich waveforms (square, saw) stay
+  band-limited; the built-in generators are band-limited by construction.
 - **Transport playback** - free-run, transport-driven; the Standalone build
   free-runs without a host.
 - **Output gain**, and session save / restore of the loaded definition.
@@ -65,15 +72,16 @@ the authoring reference.
 - **v0** - Skeleton plugin. *(done)*
 - **v1** - Expression mode: closed-form math, phasors, automatable
   parameters, oversampled anti-aliasing, transport playback. *(done)*
-- **v2** - Built-in generators: sine, sweeps, two-tone, multisine, Farina
-  chirp, impulse, step, tone burst, white/pink/brown noise, MLS, DC, silence,
-  plus a curated preset library.
-- **v3** - WTSynth-compatibility layer: wavetable mode, the Python script
-  runner, native sidecar JSON emission, render-mode playback.
-- **v4** - Internal auto-sweep and script-parameter stepping; aliasing
-  protection visuals for wavetable mode.
-- **v5** - Pitch-shifted compat mode and MIDI-driven playback.
-- **v6** - Stereo wavetable support.
+- **v2** - Built-in generators (sine, sweeps, two-tone, multisine, Farina
+  chirp, impulse, step, tone burst, white/pink/brown noise, MLS, DC, silence)
+  plus a curated preset library. *(done)*
+- **v3** - Internal auto-sweep (one-click sweeps with no DAW automation) and
+  sidecar JSON emission so WTAnalyzer can label its axes and pre-fill
+  parameters automatically.
+- **v4** - Stereo generators: decorrelated noise, L/R phase offsets, mid-side
+  content, for WTAnalyzer's stereo-image tests.
+
+See [WTGENERATOR.md](WTGENERATOR.md) for the full design doc.
 
 ## Build
 
@@ -88,10 +96,11 @@ workflows such as batch IR captures and calibration runs.
 
 ## Relationship to WTSynth
 
-WTSynth (Shane Dunne) is the wavetable synthesizer that currently serves as
-the test-signal source for the WTAnalyzer workflow. WTGenerator is a strict superset of WTSynth's analysis-relevant
-capabilities: it will read the same `wavetable.wav` files and run the same
-Python scripts unchanged (the wavetable / script paths arrive in v3), so
-existing assets keep working. What it adds is free-run transport playback, a
-neutral signal path by default, sample-rate-locked playback, aliasing
-protection, native sidecar JSON, and the expression engine.
+WTGenerator and [WTAnalyzer](https://github.com/Fine-Increments/WTAnalyzer)
+are inspired by Shane Dunne's WTSynth - the wavetable synth that sparked the
+idea - but they are a **standalone pair** and are not designed to be used
+with, compatible with, or dependent on WTSynth. There is no WTSynth wavetable
+format, no Python script runner, and no migration path: WTGenerator's
+expression engine and built-in generators replace the script-and-wavetable
+workflow outright, and add free-run transport playback, a neutral signal path
+by default, session-rate playback, and oversampled aliasing protection.

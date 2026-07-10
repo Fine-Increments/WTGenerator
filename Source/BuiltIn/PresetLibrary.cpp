@@ -90,10 +90,10 @@ namespace BuiltInPresets
                 { "twoToneF1", 60.0f }, { "twoToneF2", 7000.0f },
                 { "twoToneLevel1", -6.0f }, { "twoToneLevel2", -18.0f } } },
 
-            { "Two-Tone & Multisine", "Two-Tone 1 kHz + 1.1 kHz", {
+            { "Two-Tone & Multisine", "Two-Tone 1 kHz + 1.2 kHz", {
                 { "generatorMode", kModeBuiltIn }, { "builtInGenerator", kTwoTone },
                 { "oneShot", kLoop }, { "outputGain", 0.0f },
-                { "twoToneF1", 1000.0f }, { "twoToneF2", 1100.0f },
+                { "twoToneF1", 1000.0f }, { "twoToneF2", 1200.0f },
                 { "twoToneLevel1", -12.0f }, { "twoToneLevel2", -12.0f } } },
 
             { "Two-Tone & Multisine", "Multisine 32 Harmonics, Schroeder", {
@@ -114,9 +114,9 @@ namespace BuiltInPresets
                 { "oneShot", kOneShot }, { "outputGain", 0.0f },
                 { "impulsePolarity", kPositive }, { "impulseLevel", 0.0f } } },
 
-            { "Transients", "Impulse Train, 10 Hz", {
+            { "Transients", "Impulse Train, 2 Hz", {
                 { "generatorMode", kModeBuiltIn }, { "builtInGenerator", kImpulse },
-                { "oneShot", kPeriodic }, { "periodicRate", 10.0f }, { "outputGain", 0.0f },
+                { "oneShot", kPeriodic }, { "periodicRate", 2.0f }, { "outputGain", 0.0f },
                 { "impulsePolarity", kPositive }, { "impulseLevel", -6.0f } } },
 
             { "Transients", "Unit Step, -6 dBFS", {

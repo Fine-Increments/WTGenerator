@@ -115,6 +115,7 @@ private:
     std::array<float, kMaxExpressionParameters> paramPrev {};
     ExpressionEngine* lastEngine       = nullptr;
     bool              expressionActive = false;
+    double            lastExprStartTime = 0.0;
 
     // Built-in generators (WTGENERATOR.md section 4.4). One slot per
     // builtInGenerator Choice value; renderBuiltIn() dispatches to the

@@ -163,7 +163,8 @@ void MlsGenerator::prepare (double) { reset(); }
 
 void MlsGenerator::reset()
 {
-    lfsr = 1u;
+    lfsr      = 1u;
+    lastOrder = -1;
     gainRamp.reset (gainFor (levelParam, -12.0f));
 }
 
@@ -175,6 +176,15 @@ void MlsGenerator::render (float* out, int numSamples, double) noexcept
     const int order = juce::jlimit (2, 20,
         (orderParam != nullptr) ? (int) orderParam->load() : 16);
     const std::uint32_t mask = kMlsTaps[order];
+
+    // Reseed when the order changes: a smaller mask never XOR-clears bits set
+    // above the new order, so the register would emit a constant (-A) for up to
+    // `order` samples until they shift out. Reseeding restarts a clean sequence.
+    if (order != lastOrder)
+    {
+        lfsr      = 1u;
+        lastOrder = order;
+    }
 
     gainRamp.setTarget (gainFor (levelParam, -12.0f));
     const double invN = 1.0 / (double) numSamples;

@@ -188,7 +188,13 @@ void MultisineGenerator::render (float* out, int numSamples, double) noexcept
         for (int k = 1; k <= whole; ++k)
             sum += std::sin ((double) k * phase + harmonicPhase[(size_t) (k - 1)]);
 
-        if (boundary > 0.0 && whole < kMaxHarmonics)
+        // The fractional boundary partial (harmonic whole+1) is only summed
+        // when it stays strictly below Nyquist. Clamping `count` to
+        // nyquist/fund alone does not guarantee this: for a non-integer
+        // nyquist/fund, (whole+1)*fund can exceed Nyquist and alias back into
+        // band. Skipping it here keeps the generator band-limited by construction.
+        if (boundary > 0.0 && whole < kMaxHarmonics
+            && (double) (whole + 1) * fund < nyquist)
             sum += boundary * std::sin ((double) (whole + 1) * phase
                                         + harmonicPhase[(size_t) whole]);
 

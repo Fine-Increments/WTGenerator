@@ -185,13 +185,13 @@ void WTGeneratorAudioProcessorEditor::timerCallback()
     }
 
     // Follow Repeat Mode from any source (the selector, a preset, host
-    // automation) and enable Periodic Rate only while it is Periodic.
+    // automation) and refresh the playback controls' enabled/visible state.
     const int repeatMode = (oneShotParam != nullptr)
                              ? (int) oneShotParam->load() : 0;
     if (repeatMode != lastRepeatMode)
     {
         lastRepeatMode = repeatMode;
-        periodicRateSlider.setEnabled (repeatMode == 2);   // 2 = Periodic
+        updatePlaybackControlVisibility();
     }
 }
 
@@ -257,6 +257,13 @@ void WTGeneratorAudioProcessorEditor::updatePlaybackControlVisibility()
     repeatBox.setVisible          (repeat);
     periodicRateLabel.setVisible  (periodic);
     periodicRateSlider.setVisible (periodic);
+
+    // Impulse / Step / Tone Burst consume Periodic Rate in both Loop and
+    // Periodic repeat modes (they space repeats by it); only One-Shot ignores
+    // it. Enabling it solely in Periodic mode left it locked at its last value
+    // while a Loop-mode train still used it.
+    const int repeatMode = (oneShotParam != nullptr) ? (int) oneShotParam->load() : 0;
+    periodicRateSlider.setEnabled (periodic && repeatMode != 1);   // 1 = One-Shot
 }
 
 void WTGeneratorAudioProcessorEditor::refreshFromProcessor()

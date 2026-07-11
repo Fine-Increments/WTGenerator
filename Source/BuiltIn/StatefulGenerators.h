@@ -85,5 +85,6 @@ private:
     std::atomic<float>* orderParam = nullptr;   // Int, 2..20
     std::atomic<float>* levelParam = nullptr;   // dB
     std::uint32_t lfsr = 1u;
+    int           lastOrder = -1;               // reseed the LFSR when order changes
     ParamRamp     gainRamp;
 };

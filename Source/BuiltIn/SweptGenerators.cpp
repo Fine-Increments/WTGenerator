@@ -140,8 +140,8 @@ void ChirpGenerator::render (float* out, int numSamples, double) noexcept
     if (numSamples <= 0)
         return;
 
-    const double f0      = (startParam    != nullptr) ? (double) startParam->load()    : 20.0;
-    const double f1      = (endParam      != nullptr) ? (double) endParam->load()      : 20000.0;
+    const double f0raw   = (startParam    != nullptr) ? (double) startParam->load()    : 20.0;
+    const double f1raw   = (endParam      != nullptr) ? (double) endParam->load()      : 20000.0;
     const double dur     = juce::jmax (0.01, (durationParam != nullptr)
                                                  ? (double) durationParam->load() : 5.0);
     const bool   oneShot = (oneShotParam != nullptr) && ((int) oneShotParam->load() == kOneShot);
@@ -149,6 +149,19 @@ void ChirpGenerator::render (float* out, int numSamples, double) noexcept
 
     // Taper length, clamped so the two ends never overlap on a short chirp.
     const double fade = juce::jmin (kChirpFadeSeconds, dur * kChirpFadeFraction);
+
+    // Exact analytic Farina log sweep, phase in closed form:
+    //   phase(pos) = K * (exp(pos * L / T) - 1),  L = ln(f1/f0),  K = 2*pi*f0*T/L.
+    // WTAnalyzer's FarinaIR inverse filter is built from this same closed form
+    // (generateInverseSweep), so the deconvolution collapses to a clean delta.
+    // A per-sample numeric integral of the instantaneous frequency would drift
+    // from this analytic phase and smear the recovered impulse response - see
+    // the coordination note in WTGENERATOR.md. f1 is guarded above f0 so
+    // L stays positive (the analyzer likewise requires f1 > f0).
+    const double f0 = f0raw;
+    const double f1 = juce::jmax (f1raw, f0raw * 1.0001);
+    const double L  = std::log (f1 / f0);
+    const double K  = kTwoPi * f0 * dur / L;
 
     for (int j = 0; j < numSamples; ++j)
     {
@@ -164,7 +177,7 @@ void ChirpGenerator::render (float* out, int numSamples, double) noexcept
         if (! oneShot)
             pos = std::fmod (pos, dur);   // each repeat re-tapers in and out
 
-        out[j] = (float) (sweepSample (pos, dur, f0, f1, /*logCurve*/ true, invRate, phase)
-                            * chirpEnvelope (pos, dur, fade));
+        const double ph = K * (std::exp (pos * L / dur) - 1.0);
+        out[j] = (float) (std::sin (ph) * chirpEnvelope (pos, dur, fade));
     }
 }

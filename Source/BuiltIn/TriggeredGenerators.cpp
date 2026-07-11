@@ -154,7 +154,10 @@ void ToneBurstGenerator::render (float* out, int numSamples, double) noexcept
                             (sustainParam != nullptr) ? sustainParam->load() : -6.0f, -100.0f);
 
     const double msToSamples = sampleRate / 1000.0;
-    const double aLen = juce::jmax (0.0, (attackParam  != nullptr) ? (double) attackParam->load()  : 5.0)  * msToSamples;
+    // Floor the attack to one sample: a literal 0 ms attack would jump the
+    // envelope straight to full amplitude on the burst's first sample - a click
+    // on the continuous-phase sine. One sample of ramp is inaudible but declicks.
+    const double aLen = juce::jmax (1.0, ((attackParam != nullptr) ? (double) attackParam->load() : 5.0) * msToSamples);
     const double dLen = juce::jmax (0.0, (decayParam   != nullptr) ? (double) decayParam->load()   : 50.0) * msToSamples;
     const double gLen = juce::jmax (0.0, (gateParam    != nullptr) ? (double) gateParam->load()    : 200.0) * msToSamples;
     const double rLen = juce::jmax (0.0, (releaseParam != nullptr) ? (double) releaseParam->load() : 50.0) * msToSamples;

@@ -144,15 +144,23 @@ void SignalGenerator::renderExpression (float* out, int numSamples, double start
     // back from another generator mode), breaks the parameter history -
     // prime paramPrev to the host values rather than ramping from a stale
     // baseline.
-    const bool primeParams = (engine != lastEngine) || ! expressionActive;
+    // A transport rewind / loop jumps startTime backwards while the expression
+    // path stays active; the engine already resets its phasors on the same
+    // backward step, so the FIR must be reset too or the first filter-length
+    // samples of each loop blend the pre-rewind signal into the new one (an
+    // audible click, and non-reproducible-from-start output).
+    const bool rewound = expressionActive && startTime < lastExprStartTime;
+
+    const bool primeParams = (engine != lastEngine) || ! expressionActive || rewound;
 
     // The oversampler's FIR was not fed while another mode (or silence) was
     // active - reset it so the resumed expression carries no stale state.
-    if (! expressionActive)
+    if (! expressionActive || rewound)
         oversampling.reset();
 
-    lastEngine       = engine;
-    expressionActive = true;
+    lastEngine        = engine;
+    expressionActive  = true;
+    lastExprStartTime = startTime;
 
     // Oversample up, evaluate the expression into the oversampled buffer,
     // then decimate back down. The expression engine evaluates arbitrary
@@ -192,7 +200,13 @@ void SignalGenerator::renderExpression (float* out, int numSamples, double start
                 engine->setParameterNormalised (i, prev + (curr - prev) * frac);
             }
 
-            os[j] = (float) engine->evaluate (startTime + (double) j * invOsRate, invOsRate);
+            // Sanitize the expression result before it enters the decimation
+            // FIR: a legal-but-singular expression (log(0), 1/(t-1), tan near
+            // pi/2) can yield Inf/NaN for one sample, and an unfiltered Inf/NaN
+            // would poison every FIR tap it touches - a burst of garbage output
+            // long after the expression itself recovered. Clamp to a sane range.
+            const double v = engine->evaluate (startTime + (double) j * invOsRate, invOsRate);
+            os[j] = std::isfinite (v) ? (float) juce::jlimit (-4.0, 4.0, v) : 0.0f;
         }
 
         for (int i = 0; i < numParams; ++i)

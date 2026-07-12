@@ -81,7 +81,9 @@ the authoring reference.
 - **v4** - Stereo generators: decorrelated noise, L/R phase offsets, mid-side
   content, for WTAnalyzer's stereo-image tests.
 
-See [WTGENERATOR.md](WTGENERATOR.md) for the full design doc.
+See [WTGENERATOR.md](WTGENERATOR.md) for the full design doc, and
+[COORDINATION.md](COORDINATION.md) for the WTGenerator <-> WTAnalyzer interface
+contract (Farina sweep phase, sweep-position sharing, sidecar handoff).
 
 ## Build
 
